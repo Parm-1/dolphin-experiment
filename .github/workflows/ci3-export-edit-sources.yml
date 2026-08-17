@@ -1,6 +1,9 @@
 name: CI3 Export Edit Sources
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-export-edit-sources.yml"
   push:
     branches:
       - ci3/block-profile-accumulator
