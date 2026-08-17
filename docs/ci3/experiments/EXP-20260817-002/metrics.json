@@ -1,0 +1,223 @@
+{
+  "arm64_dispatch": {
+    "linux-arm64-clang": {
+      "engine": "compact-switch-16",
+      "max_speedup": 1.4878964941569282,
+      "median_ns_per_op": 1.2616,
+      "median_speedup": 1.4118585906950762,
+      "min_speedup": 1.349432467433534
+    },
+    "linux-arm64-gcc": {
+      "engine": "compact-switch-12",
+      "max_speedup": 2.461433531746032,
+      "median_ns_per_op": 0.8653,
+      "median_speedup": 2.2408413267075002,
+      "min_speedup": 2.1960396039603958
+    },
+    "macos-arm64-appleclang": {
+      "engine": "preserve-none-musttail",
+      "max_speedup": 2.352365130716097,
+      "median_ns_per_op": 1.2545,
+      "median_speedup": 2.1592847089990896,
+      "min_speedup": 1.6702612491174016
+    }
+  },
+  "assembly_checks": {
+    "appleclang_tailadd0": [
+      "ldr x0, [x20, #0x10]!",
+      "ldur w8, [x20, #-0x8]",
+      "add x23, x8, x23",
+      "br x0"
+    ],
+    "gcc_arm64_boundary": "paired stores; bl CI3SemanticBoundary; paired reloads; boundary body ret"
+  },
+  "every_op_boundary_cost_vs_per_trace": {
+    "linux-arm64-clang": {
+      "direct": {
+        "max": 1.244180827188201,
+        "median_cost_vs_per_trace": 1.2042600073448402,
+        "min": 1.1301298020191424
+      },
+      "local": {
+        "max": 1.9112826376977319,
+        "median_cost_vs_per_trace": 1.8182735528850562,
+        "min": 1.7281936351411924
+      }
+    },
+    "linux-arm64-gcc": {
+      "direct": {
+        "max": 1.8051474775082563,
+        "median_cost_vs_per_trace": 1.772666814453558,
+        "min": 1.637987936724707
+      },
+      "local": {
+        "max": 2.3547443547443545,
+        "median_cost_vs_per_trace": 2.2319822320932814,
+        "min": 2.15483300154833
+      }
+    },
+    "macos-arm64-appleclang": {
+      "direct": {
+        "max": 1.6976143806473205,
+        "median_cost_vs_per_trace": 1.3259927258233273,
+        "min": 1.1606871950469475
+      },
+      "local": {
+        "max": 1.843493867783428,
+        "median_cost_vs_per_trace": 1.5693700351006838,
+        "min": 1.1362018616535863
+      }
+    }
+  },
+  "experiment_id": "EXP-20260817-002",
+  "matrix": {
+    "cases_per_target": 9,
+    "repetitions": 7,
+    "seeds": 3,
+    "target_ops_per_case": 2000000,
+    "trace_lengths": [
+      64,
+      256,
+      1024
+    ]
+  },
+  "schema_version": 1,
+  "state_pairwise_direct_over_local": {
+    "linux-arm64-clang": {
+      "every-16": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.3072765072765073,
+        "median": 1.2770259384565812,
+        "min": 1.1621711621711621
+      },
+      "every-4": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.1703079085217838,
+        "median": 1.155012802836321,
+        "min": 1.091511058137995
+      },
+      "every-op": {
+        "cases": 9,
+        "local_wins": 0,
+        "max": 0.9805933188457068,
+        "median": 0.8950073795104075,
+        "min": 0.8493061794948588
+      },
+      "per-trace": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.4662675788673507,
+        "median": 1.4353729015686634,
+        "min": 1.2738585329341316
+      },
+      "promotable": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.3634092171016103,
+        "median": 1.3511464847451204,
+        "min": 1.226826302497428
+      }
+    },
+    "linux-arm64-gcc": {
+      "every-16": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.1806767723166436,
+        "median": 1.1442639817740867,
+        "min": 1.0588189100047118
+      },
+      "every-4": {
+        "cases": 9,
+        "local_wins": 0,
+        "max": 0.9656100642751195,
+        "median": 0.9305778921410958,
+        "min": 0.7807919594248756
+      },
+      "every-op": {
+        "cases": 9,
+        "local_wins": 0,
+        "max": 0.8213369548815452,
+        "median": 0.8011716228962915,
+        "min": 0.7290917380071932
+      },
+      "per-trace": {
+        "cases": 9,
+        "local_wins": 7,
+        "max": 1.0253890253890252,
+        "median": 1.003990688393748,
+        "min": 0.9896314662459146
+      },
+      "promotable": {
+        "cases": 9,
+        "local_wins": 6,
+        "max": 1.0313562109417826,
+        "median": 1.006753077006862,
+        "min": 0.9786233911583659
+      }
+    },
+    "macos-arm64-appleclang": {
+      "every-16": {
+        "cases": 9,
+        "local_wins": 7,
+        "max": 1.53589698359499,
+        "median": 1.1820140563279127,
+        "min": 0.7665829412389005
+      },
+      "every-4": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.5844108541249315,
+        "median": 1.2213107601012305,
+        "min": 1.1089866156787762
+      },
+      "every-op": {
+        "cases": 9,
+        "local_wins": 8,
+        "max": 1.4060742852617407,
+        "median": 1.0659115986240022,
+        "min": 0.941322109433028
+      },
+      "per-trace": {
+        "cases": 9,
+        "local_wins": 8,
+        "max": 1.5513644170218177,
+        "median": 1.2488184265629676,
+        "min": 0.9012137251323233
+      },
+      "promotable": {
+        "cases": 9,
+        "local_wins": 9,
+        "max": 1.318784051510649,
+        "median": 1.1512340276562227,
+        "min": 1.0049779920352127
+      }
+    }
+  },
+  "text_bytes": {
+    "linux-arm64-clang": {
+      "dispatch": 34439,
+      "state": 35108
+    },
+    "linux-arm64-gcc": {
+      "dispatch": 36220,
+      "state": 34612
+    }
+  },
+  "workflow_run_id": 32022583823,
+  "x64_dispatch_winners": {
+    "linux-x64-clang": {
+      "engine": "pinned-switch-8",
+      "max_speedup": 4.016185668824756,
+      "median_speedup": 2.7269365181691723,
+      "min_speedup": 1.639339582242946
+    },
+    "linux-x64-gcc": {
+      "engine": "computed-goto-8",
+      "max_speedup": 3.6133427423732494,
+      "median_speedup": 2.616845729209948,
+      "min_speedup": 1.2572657326210395
+    }
+  }
+}

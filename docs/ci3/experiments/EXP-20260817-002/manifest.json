@@ -1,0 +1,88 @@
+{
+  "checks": {
+    "all_jobs": "success",
+    "deterministic_equivalence": "pass"
+  },
+  "date": "2026-08-17",
+  "durable_evidence": {
+    "aggregate_metrics": "metrics.json",
+    "full_raw_artifacts": "GitHub Actions artifact IDs and digests above; rerunnable from this commit"
+  },
+  "experiment_id": "EXP-20260817-002",
+  "head_sha": "2ca02ca57a14c56edd295f3efc512578f465f0c6",
+  "jobs": [
+    {
+      "architecture": "aarch64",
+      "artifact_id": 9285895284,
+      "artifact_sha256": "3c23f1f585903f2d6a03aa732813afa56242454cdcbcf2f5d406f37739ae49dd",
+      "compiler": "GCC 13.3.0",
+      "job_id": 95365176666,
+      "name": "Linux ARM64 GCC",
+      "os": "Ubuntu 24.04.4 / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04-arm"
+    },
+    {
+      "architecture": "aarch64",
+      "artifact_id": 9285894184,
+      "artifact_sha256": "1333e611d80d7e207262a01b56ac9439a4d3860652d8d14bcdca094dea868006",
+      "compiler": "Clang 18.1.3",
+      "job_id": 95365176754,
+      "name": "Linux ARM64 Clang",
+      "os": "Ubuntu 24.04.4 / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04-arm"
+    },
+    {
+      "architecture": "arm64",
+      "artifact_id": 9285897981,
+      "artifact_sha256": "04f227420785516b91cc08faa01aaf4819710842d87c02e40f446ebd9d64fa57",
+      "compiler": "AppleClang 17.0.0",
+      "hardware": "Apple M1 (Virtual)",
+      "job_id": 95365176730,
+      "name": "macOS ARM64 AppleClang",
+      "os": "macOS 15.7.7 / Darwin 24.6",
+      "runner": "macos-15"
+    },
+    {
+      "architecture": "x86_64",
+      "artifact_id": 9285900944,
+      "artifact_sha256": "74e10552b717f16dc0fa3256876bd0e037f5ee6e3d55f5176ba4f8b6464e67df",
+      "compiler": "GCC 13.3.0",
+      "job_id": 95365176846,
+      "name": "Linux x64 GCC",
+      "os": "Ubuntu 24.04.4 / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04"
+    },
+    {
+      "architecture": "x86_64",
+      "artifact_id": 9285901973,
+      "artifact_sha256": "1da39cb7a9373a56e43dce4e36cb11e11dfe0a60011cdb083d1f6069a548994",
+      "compiler": "Clang 18.1.3",
+      "job_id": 95365176843,
+      "name": "Linux x64 Clang",
+      "os": "Ubuntu 24.04.4 / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04"
+    }
+  ],
+  "pull_request": 4,
+  "repository": "Parm-1/dolphin-experiment",
+  "timezone": "America/Toronto",
+  "workflow": {
+    "initial_failed_run_id": 32022266940,
+    "initial_failure": "run_matrix.py syntax corruption during file upload; C++ builds and equivalence tests had passed",
+    "matrix": {
+      "repetitions": 7,
+      "seeds": [
+        "0xC13C0FFEE1234567",
+        "0x9E3779B97F4A7C15",
+        "0xD1B54A32D192ED03"
+      ],
+      "target_operations_per_case": 2000000,
+      "trace_lengths": [
+        64,
+        256,
+        1024
+      ]
+    },
+    "successful_run_id": 32022583823
+  }
+}
