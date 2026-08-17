@@ -1,0 +1,84 @@
+name: CI3 Dispatch Lab
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-dispatch-lab.yml"
+      - "Tools/CI3DispatchLab/**"
+      - "docs/ci3/**"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/ci3-dispatch-lab.yml"
+      - "Tools/CI3DispatchLab/**"
+      - "docs/ci3/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-benchmark:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 GCC
+            runner: ubuntu-24.04
+            cxx: g++
+          - name: Linux x64 Clang
+            runner: ubuntu-24.04
+            cxx: clang++
+          - name: Linux ARM64 GCC
+            runner: ubuntu-24.04-arm
+            cxx: g++
+          - name: macOS ARM64 AppleClang
+            runner: macos-15
+            cxx: clang++
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Record environment
+        shell: bash
+        run: |
+          uname -a
+          sysctl -n machdep.cpu.brand_string 2>/dev/null || true
+          "${{ matrix.cxx }}" --version
+          cmake --version
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake \
+            -S Tools/CI3DispatchLab \
+            -B build/ci3-dispatch-lab \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}"
+
+      - name: Build
+        run: cmake --build build/ci3-dispatch-lab --parallel
+
+      - name: Verify equivalence
+        run: ctest --test-dir build/ci3-dispatch-lab --output-on-failure
+
+      - name: Run controlled smoke benchmark
+        shell: bash
+        run: |
+          ./build/ci3-dispatch-lab/ci3_dispatch_lab \
+            --iterations 10000 \
+            --repetitions 5 \
+            --trace-length 256 \
+            --seed 0xC13C0FFEE1234567 \
+            | tee ci3-dispatch-lab-${{ matrix.name }}.jsonl
+
+      - name: Upload raw result
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci3-dispatch-lab-${{ matrix.name }}
+          path: ci3-dispatch-lab-${{ matrix.name }}.jsonl
+          if-no-files-found: error
