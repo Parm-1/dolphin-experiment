@@ -5,14 +5,12 @@ on:
     paths:
       - ".github/workflows/ci3-dispatch-lab.yml"
       - "Tools/CI3DispatchLab/**"
-      - "docs/ci3/**"
   push:
     branches:
       - master
     paths:
       - ".github/workflows/ci3-dispatch-lab.yml"
       - "Tools/CI3DispatchLab/**"
-      - "docs/ci3/**"
   workflow_dispatch:
 
 permissions:
@@ -38,6 +36,10 @@ jobs:
             slug: linux-arm64-gcc
             runner: ubuntu-24.04-arm
             cxx: g++
+          - name: Linux ARM64 Clang
+            slug: linux-arm64-clang
+            runner: ubuntu-24.04-arm
+            cxx: clang++
           - name: macOS ARM64 AppleClang
             slug: macos-arm64-appleclang
             runner: macos-15
@@ -45,15 +47,19 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Record environment
         shell: bash
         run: |
-          uname -a
-          sysctl -n machdep.cpu.brand_string 2>/dev/null || true
-          "${{ matrix.cxx }}" --version
-          cmake --version
+          mkdir -p "results/${{ matrix.slug }}/diagnostics"
+          {
+            uname -a
+            sysctl -n machdep.cpu.brand_string 2>/dev/null || true
+            "${{ matrix.cxx }}" --version
+            cmake --version
+            python3 --version
+          } | tee "results/${{ matrix.slug }}/environment.txt"
 
       - name: Configure
         shell: bash
@@ -68,21 +74,62 @@ jobs:
         run: cmake --build build/ci3-dispatch-lab --parallel
 
       - name: Verify equivalence
-        run: ctest --test-dir build/ci3-dispatch-lab --output-on-failure
-
-      - name: Run controlled smoke benchmark
         shell: bash
         run: |
-          ./build/ci3-dispatch-lab/ci3_dispatch_lab \
-            --iterations 10000 \
-            --repetitions 5 \
-            --trace-length 256 \
-            --seed 0xC13C0FFEE1234567 \
-            | tee "ci3-dispatch-lab-${{ matrix.slug }}.jsonl"
+          ctest --test-dir build/ci3-dispatch-lab --output-on-failure \
+            | tee "results/${{ matrix.slug }}/ctest.txt"
 
-      - name: Upload raw result
-        uses: actions/upload-artifact@v4
+      - name: Run dispatch matrix
+        shell: bash
+        run: |
+          python3 Tools/CI3DispatchLab/run_matrix.py \
+            --binary build/ci3-dispatch-lab/ci3_dispatch_lab \
+            --output-dir "results/${{ matrix.slug }}/dispatch" \
+            --baseline-engine callback-two-level \
+            --target-ops 2000000 \
+            --repetitions 7
+
+      - name: Run state-materialization matrix
+        shell: bash
+        run: |
+          python3 Tools/CI3DispatchLab/run_matrix.py \
+            --binary build/ci3-dispatch-lab/ci3_state_lab \
+            --output-dir "results/${{ matrix.slug }}/state" \
+            --baseline-engine state-promotable \
+            --target-ops 2000000 \
+            --repetitions 7
+
+      - name: Capture binary diagnostics
+        shell: bash
+        run: |
+          diagnostic_dir="results/${{ matrix.slug }}/diagnostics"
+          size build/ci3-dispatch-lab/ci3_dispatch_lab \
+               build/ci3-dispatch-lab/ci3_state_lab \
+            > "${diagnostic_dir}/size.txt"
+
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            nm -nm build/ci3-dispatch-lab/ci3_dispatch_lab \
+              > "${diagnostic_dir}/dispatch-nm.txt"
+            nm -nm build/ci3-dispatch-lab/ci3_state_lab \
+              > "${diagnostic_dir}/state-nm.txt"
+            otool -tvV build/ci3-dispatch-lab/ci3_dispatch_lab \
+              > "${diagnostic_dir}/dispatch-assembly.txt"
+            otool -tvV build/ci3-dispatch-lab/ci3_state_lab \
+              > "${diagnostic_dir}/state-assembly.txt"
+          else
+            nm -S -C --size-sort build/ci3-dispatch-lab/ci3_dispatch_lab \
+              > "${diagnostic_dir}/dispatch-nm.txt"
+            nm -S -C --size-sort build/ci3-dispatch-lab/ci3_state_lab \
+              > "${diagnostic_dir}/state-nm.txt"
+            objdump -d -C build/ci3-dispatch-lab/ci3_dispatch_lab \
+              > "${diagnostic_dir}/dispatch-assembly.txt"
+            objdump -d -C build/ci3-dispatch-lab/ci3_state_lab \
+              > "${diagnostic_dir}/state-assembly.txt"
+          fi
+
+      - name: Upload raw results and diagnostics
+        uses: actions/upload-artifact@v7
         with:
-          name: ci3-dispatch-lab-${{ matrix.slug }}
-          path: ci3-dispatch-lab-${{ matrix.slug }}.jsonl
+          name: ci3-dispatch-lab-v2-${{ matrix.slug }}
+          path: results/${{ matrix.slug }}
           if-no-files-found: error
