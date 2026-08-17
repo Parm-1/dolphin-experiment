@@ -5,6 +5,8 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
+#include <iomanip>
+#include <iterator>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -55,10 +57,26 @@ static_assert(sizeof(CI3Op) == 8);
 
 constexpr std::array<std::string_view, static_cast<std::size_t>(CI3Opcode::Count)>
     EXPECTED_NAMES = {
-        "addi",    "ori",   "oris",   "xori",  "xoris",  "rlwinmx",
-        "andx",    "andcx", "orx",    "orcx",  "xorx",   "norx",
-        "cntlzwx", "extsbx", "extshx", "slwx", "srwx",
+        "addi",     "ori",    "oris",   "xori",   "xoris",  "rlwinmx",
+        "andx",     "andcx",  "orx",    "orcx",   "xorx",   "norx",
+        "cntlzwx",  "extsbx", "extshx", "slwx",   "srwx",
 };
+
+constexpr bool FormHasRecordBit(CI3Opcode opcode)
+{
+  switch (opcode)
+  {
+  case CI3Opcode::AddImmediate:
+  case CI3Opcode::OrImmediate:
+  case CI3Opcode::OrImmediateShifted:
+  case CI3Opcode::XorImmediate:
+  case CI3Opcode::XorImmediateShifted:
+  case CI3Opcode::Count:
+    return false;
+  default:
+    return true;
+  }
+}
 
 constexpr u32 PackRotateMask(u32 shift, u32 mask_begin, u32 mask_end)
 {
@@ -453,9 +471,7 @@ std::vector<CI3Op> MakeTrace(std::size_t length, std::uint64_t seed)
     op.immediate = static_cast<u32>(value >> 32);
 
     if (op.opcode == CI3Opcode::RotateLeftWordImmediateAndMask)
-    {
       op.immediate = PackRotateMask(value >> 32, value >> 37, value >> 42);
-    }
 
     trace.emplace_back(op);
   }
@@ -511,12 +527,13 @@ TEST(CI3PowerPCIntegerDifferential, EncodingsAndMetadataMatchScope)
                        0x8001;
 
     const UGeckoInstruction inst = Encode(op);
-    EXPECT_EQ(PPCTables::GetInstructionName(inst, 0), EXPECTED_NAMES[i]);
+    EXPECT_EQ(std::string_view{PPCTables::GetInstructionName(inst, 0)}, EXPECTED_NAMES[i]);
 
     const GekkoOPInfo* const info = PPCTables::GetOpInfo(inst, 0);
     EXPECT_EQ(info->type, OpType::Integer) << EXPECTED_NAMES[i];
     EXPECT_EQ(info->flags & disallowed_flags, 0U) << EXPECTED_NAMES[i];
-    EXPECT_FALSE(inst.Rc) << EXPECTED_NAMES[i];
+    if (FormHasRecordBit(op.opcode))
+      EXPECT_FALSE(inst.Rc) << EXPECTED_NAMES[i];
   }
 }
 
