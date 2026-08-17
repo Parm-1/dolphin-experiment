@@ -30,14 +30,17 @@ jobs:
             slug: linux-x64-gcc
             runner: ubuntu-24.04
             cxx: g++
+            cxx_flags: ""
           - name: Linux ARM64 Clang
             slug: linux-arm64-clang
             runner: ubuntu-24.04-arm
-            cxx: clang++
+            cxx: clang++-18
+            cxx_flags: -stdlib=libc++
           - name: macOS ARM64 AppleClang
             slug: macos-arm64-appleclang
             runner: macos-15
             cxx: clang++
+            cxx_flags: ""
 
     steps:
       - name: Check out source and submodules
@@ -51,6 +54,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ninja-build pkg-config
 
+      - name: Install Linux ARM64 Clang standard library
+        if: matrix.slug == 'linux-arm64-clang'
+        run: |
+          sudo apt-get install -y clang-18 libc++-18-dev libc++abi-18-dev
+
       - name: Record environment
         shell: bash
         run: |
@@ -59,12 +67,35 @@ jobs:
             uname -a
             sysctl -n machdep.cpu.brand_string 2>/dev/null || true
             "${{ matrix.cxx }}" --version
+            printf 'CXX flags: %s\n' '${{ matrix.cxx_flags }}'
             cmake --version
             ninja --version
           } | tee "results/${{ matrix.slug }}/environment.txt"
 
+      - name: Verify C++23 standard library
+        if: matrix.slug == 'linux-arm64-clang'
+        shell: bash
+        env:
+          CI3_CXX_FLAGS: ${{ matrix.cxx_flags }}
+        run: |
+          cat > /tmp/ci3-expected.cpp <<'CPP'
+          #include <expected>
+
+          int main()
+          {
+            std::expected<int, int> value = 7;
+            return value.value() == 7 ? 0 : 1;
+          }
+          CPP
+
+          "${{ matrix.cxx }}" -std=c++23 ${CI3_CXX_FLAGS} \
+            /tmp/ci3-expected.cpp -o /tmp/ci3-expected
+          /tmp/ci3-expected
+
       - name: Configure minimal test build
         shell: bash
+        env:
+          CI3_CXX_FLAGS: ${{ matrix.cxx_flags }}
         run: |
           cmake \
             -S . \
@@ -72,6 +103,7 @@ jobs:
             -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
+            -DCMAKE_CXX_FLAGS="${CI3_CXX_FLAGS}" \
             -DDISTRIBUTOR=CI3-PIR \
             -DUSE_SYSTEM_LIBS=OFF \
             -DENABLE_TESTS=ON \
