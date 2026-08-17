@@ -70,7 +70,7 @@ def validate_args(args: argparse.Namespace) -> None:
     if not args.binary.is_file():
         raise ValueError(f"benchmark binary does not exist: {args.binary}")
     if args.target_ops <= 0:
-        raise ValueError,"--target-ops must be positive")
+        raise ValueError("--target-ops must be positive")
     if args.repetitions <= 0:
         raise ValueError("--repetitions must be positive")
     for trace_length in args.trace_lengths or DEFAULT_TRACE_LENGTHS:
