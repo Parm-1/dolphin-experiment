@@ -1,0 +1,77 @@
+{
+  "checks": {
+    "all_jobs": "success",
+    "encoding_name_metadata_scope": "pass",
+    "fixed_edge_cases": "pass",
+    "randomized_differential": "pass",
+    "architectural_state_invariants": "pass"
+  },
+  "date": "2026-08-17",
+  "durable_evidence": {
+    "full_raw_artifacts": "GitHub Actions artifact IDs and SHA-256 digests below; rerunnable from tested_head_sha",
+    "hypothesis": "hypothesis.md",
+    "verdict": "verdict.md"
+  },
+  "experiment_id": "EXP-20260817-003",
+  "interpretation": {
+    "gate_2": "open",
+    "performance_claim": "not tested",
+    "result": "scoped semantic differential pass",
+    "runtime_backend": "not implemented"
+  },
+  "jobs": [
+    {
+      "architecture": "x86_64",
+      "artifact_id": 9302142672,
+      "artifact_sha256": "3c951010cec9014e04e6c02030b0675bd3bdab1971c48c5ebfb81829d92cfae3",
+      "compiler": "GCC 13.3.0",
+      "job_id": 95513681582,
+      "name": "Linux x64 GCC",
+      "os": "Ubuntu 24.04 hosted runner / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04",
+      "tests_passed": 3
+    },
+    {
+      "architecture": "aarch64",
+      "artifact_id": 9301993183,
+      "artifact_sha256": "096fc80d3f959aeb4f70d8bd6b5e31f328cd36f383f4fe7a8fc754144c64e6cf",
+      "compiler": "Clang 18.1.3 with libc++ 18",
+      "job_id": 95513681495,
+      "name": "Linux ARM64 Clang",
+      "os": "Ubuntu 24.04 ARM hosted runner / Linux 6.17 Azure",
+      "runner": "ubuntu-24.04-arm",
+      "tests_passed": 3
+    },
+    {
+      "architecture": "arm64",
+      "artifact_id": 9301952781,
+      "artifact_sha256": "e1d56d0fab6fbcf93bf22f26a54ecb47720d020a47581b5ed99c9c2796964374",
+      "compiler": "AppleClang 17.0.0",
+      "hardware": "Apple M1 (Virtual)",
+      "job_id": 95513681535,
+      "name": "macOS ARM64 AppleClang",
+      "os": "macOS 15 hosted runner / Darwin 24.6",
+      "runner": "macos-15",
+      "tests_passed": 3
+    }
+  ],
+  "operation_forms": 17,
+  "operation_record_size_bytes": 8,
+  "pull_request": 5,
+  "repository": "Parm-1/dolphin-experiment",
+  "tested_head_sha": "24d3b521e6139e02b536cd415b4afd9a16044cf9",
+  "timezone": "America/Toronto",
+  "workflow": {
+    "initial_failed_run_id": 32059256892,
+    "initial_failure": "metadata test assumed an Rc field for immediate-form encodings; fixed and randomized semantic tests passed",
+    "intermediate_failed_run_id": 32059823903,
+    "intermediate_failure": "Linux ARM64 default Clang/libstdc++ pairing lacked std::expected; x64 and macOS jobs passed",
+    "successful_run_id": 32070900486
+  },
+  "workload": {
+    "fixed_operations": 18,
+    "operations_per_seed": 512,
+    "randomized_operations": 6144,
+    "randomized_seed_count": 12
+  }
+}

@@ -44,6 +44,7 @@ else()
 endif()
 
 target_sources(PowerPCTest PRIVATE
+  PowerPC/CI3IntegerDifferentialTest.cpp
   PowerPC/TestValues.h
   StubJit.h
 )

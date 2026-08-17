@@ -1,0 +1,155 @@
+name: CI3 PowerPC Differential
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-powerpc-differential.yml"
+      - "Source/UnitTests/Core/CMakeLists.txt"
+      - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/ci3-powerpc-differential.yml"
+      - "Source/UnitTests/Core/CMakeLists.txt"
+      - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  differential-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 GCC
+            slug: linux-x64-gcc
+            runner: ubuntu-24.04
+            cxx: g++
+            cxx_flags: ""
+          - name: Linux ARM64 Clang
+            slug: linux-arm64-clang
+            runner: ubuntu-24.04-arm
+            cxx: clang++-18
+            cxx_flags: -stdlib=libc++
+          - name: macOS ARM64 AppleClang
+            slug: macos-arm64-appleclang
+            runner: macos-15
+            cxx: clang++
+            cxx_flags: ""
+
+    steps:
+      - name: Check out source and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install Linux build tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config
+
+      - name: Install Linux ARM64 Clang standard library
+        if: matrix.slug == 'linux-arm64-clang'
+        run: |
+          sudo apt-get install -y clang-18 libc++-18-dev libc++abi-18-dev
+
+      - name: Record environment
+        shell: bash
+        run: |
+          mkdir -p "results/${{ matrix.slug }}"
+          {
+            uname -a
+            sysctl -n machdep.cpu.brand_string 2>/dev/null || true
+            "${{ matrix.cxx }}" --version
+            printf 'CXX flags: %s\n' '${{ matrix.cxx_flags }}'
+            cmake --version
+            ninja --version
+          } | tee "results/${{ matrix.slug }}/environment.txt"
+
+      - name: Verify C++23 standard library
+        if: matrix.slug == 'linux-arm64-clang'
+        shell: bash
+        env:
+          CI3_CXX_FLAGS: ${{ matrix.cxx_flags }}
+        run: |
+          cat > /tmp/ci3-expected.cpp <<'CPP'
+          #include <expected>
+
+          int main()
+          {
+            std::expected<int, int> value = 7;
+            return value.value() == 7 ? 0 : 1;
+          }
+          CPP
+
+          "${{ matrix.cxx }}" -std=c++23 ${CI3_CXX_FLAGS} \
+            /tmp/ci3-expected.cpp -o /tmp/ci3-expected
+          /tmp/ci3-expected
+
+      - name: Configure minimal test build
+        shell: bash
+        env:
+          CI3_CXX_FLAGS: ${{ matrix.cxx_flags }}
+        run: |
+          cmake \
+            -S . \
+            -B build/ci3-powerpc \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER="${{ matrix.cxx }}" \
+            -DCMAKE_CXX_FLAGS="${CI3_CXX_FLAGS}" \
+            -DDISTRIBUTOR=CI3-PIR \
+            -DUSE_SYSTEM_LIBS=OFF \
+            -DENABLE_TESTS=ON \
+            -DENABLE_QT=OFF \
+            -DENABLE_NOGUI=OFF \
+            -DENABLE_CLI_TOOL=OFF \
+            -DENABLE_HEADLESS=OFF \
+            -DENABLE_X11=OFF \
+            -DENABLE_EGL=OFF \
+            -DENABLE_VULKAN=OFF \
+            -DENABLE_LLVM=OFF \
+            -DENABLE_ALSA=OFF \
+            -DENABLE_PULSEAUDIO=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_SDL=OFF \
+            -DENABLE_HWDB=OFF \
+            -DENABLE_EVDEV=OFF \
+            -DUSE_UPNP=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_MGBA=OFF \
+            -DUSE_RETRO_ACHIEVEMENTS=OFF \
+            -DENABLE_AUTOUPDATE=OFF \
+            -DENABLE_ANALYTICS=OFF \
+            -DENCODE_FRAMEDUMPS=OFF \
+            -DUSE_BUNDLED_MOLTENVK=OFF \
+            -DMACOS_CODE_SIGNING=OFF \
+            2>&1 | tee "results/${{ matrix.slug }}/configure.txt"
+
+      - name: Build unit-test executable
+        shell: bash
+        run: |
+          cmake --build build/ci3-powerpc --target tests --parallel 4 \
+            2>&1 | tee "results/${{ matrix.slug }}/build.txt"
+
+      - name: Run CI3 PowerPC differential tests
+        shell: bash
+        run: |
+          ./build/ci3-powerpc/Binaries/Tests/tests \
+            --gtest_filter='CI3PowerPCIntegerDifferential.*' \
+            --gtest_color=no \
+            2>&1 | tee "results/${{ matrix.slug }}/test.txt"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-powerpc-differential-${{ matrix.slug }}
+          path: results/${{ matrix.slug }}
+          if-no-files-found: error

@@ -48,3 +48,21 @@ Decision: CI3 console-behavior work remains in the experimental fork unless Dolp
 Rationale: `Contributing.md` explicitly restricts LLM use for emulated-console behavior and requires AI disclosure.
 
 Reversible: only through a policy-compliant human-led process.
+
+## D-005 — Pair Linux ARM64 Clang 18 with libc++ 18 in CI
+
+Date: 2026-08-17
+
+Decision: the Linux ARM64 differential-test job uses `clang++-18 -stdlib=libc++` with
+`libc++-18-dev` and `libc++abi-18-dev`, and runs a small `std::expected` preflight before the full
+Dolphin build.
+
+Rationale:
+
+- Run `32059823903` reached unrelated DiscIO code before failing because the runner's default
+  Clang/libstdc++ pairing did not provide the required C++23 `std::expected` implementation.
+- The explicit pairing makes the compiler and standard library reproducible.
+- The preflight converts a late full-build failure into a fast, local diagnostic.
+
+Reversible: yes. Remove the override after the default ARM64 runner toolchain provides the required
+C++23 library surface and a controlled rerun passes.
