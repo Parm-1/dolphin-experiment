@@ -27,15 +27,19 @@ jobs:
       matrix:
         include:
           - name: Linux x64 GCC
+            slug: linux-x64-gcc
             runner: ubuntu-24.04
             cxx: g++
           - name: Linux x64 Clang
+            slug: linux-x64-clang
             runner: ubuntu-24.04
             cxx: clang++
           - name: Linux ARM64 GCC
+            slug: linux-arm64-gcc
             runner: ubuntu-24.04-arm
             cxx: g++
           - name: macOS ARM64 AppleClang
+            slug: macos-arm64-appleclang
             runner: macos-15
             cxx: clang++
 
@@ -74,11 +78,11 @@ jobs:
             --repetitions 5 \
             --trace-length 256 \
             --seed 0xC13C0FFEE1234567 \
-            | tee ci3-dispatch-lab-${{ matrix.name }}.jsonl
+            | tee "ci3-dispatch-lab-${{ matrix.slug }}.jsonl"
 
       - name: Upload raw result
         uses: actions/upload-artifact@v4
         with:
-          name: ci3-dispatch-lab-${{ matrix.name }}
-          path: ci3-dispatch-lab-${{ matrix.name }}.jsonl
+          name: ci3-dispatch-lab-${{ matrix.slug }}
+          path: ci3-dispatch-lab-${{ matrix.slug }}.jsonl
           if-no-files-found: error
