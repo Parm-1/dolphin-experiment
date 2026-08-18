@@ -18,12 +18,15 @@ execution backend, changing the opcode subset, claiming performance, or beginnin
 
 - Repository: `Parm-1/dolphin-experiment`
 - Pull request: `#17`
-- PR head: `ab4251f14c5cfeb25d78a7a1609c79bc8ed9b2ad`
+- Tested PR head: `ab4251f14c5cfeb25d78a7a1609c79bc8ed9b2ad`
 - GitHub pull-request merge ref checked out by Actions: `01faa904e1caff3195b2d8185416c9d8f43479b1`
+- Evidence publication head: `57c1972e3019507f70f39c350f80e3dd3f6ea8f3`
 - Base prerequisite: PR `#10`, merge `70abc18a2fb0d56135dcc35a41d988a50b53c7bc`
 - Prerequisite workflow: `32110199577`, success
 - Valid route workflow: `32124068535`, success
 - Route job: `95670635180`, success
+- Publication workflow: `32126522531`, success
+- Publication job: `95678185593`, success
 - Artifact: `9320322911`
 - Artifact digest: `sha256:c98bc4432ae5f7b18b35922a9c6d2f052b5c14128ff4f3df9ad0bb4d3ebf0692`
 - Fixture source: `dolphin-emu/hwtests@f28077b139eec18967f60db6ce1e15b182dfeac0`
