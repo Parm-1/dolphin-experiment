@@ -10,13 +10,13 @@
   "selection": {
     "rule": "Pin the upstream default-branch head available before any EXP-005 build, route, profile, or performance result is generated or inspected.",
     "selected_at": "2026-08-18",
-    "reason": "The original PR referenced this prerequisite but never committed it. The pin is reconstructed before qualification from the public upstream repository and is independent of all downstream measurements."
+    "reason": "The original PR referenced this prerequisite but never committed it. The pin was reconstructed before qualification from the public upstream repository and is independent of all downstream measurements."
   },
   "scope": {
-    "source_build_started": false,
-    "fixture_selected": false,
-    "fixture_run": false,
-    "profile_generated": false,
-    "profile_examined": false
+    "source_build_started_at_pin": false,
+    "fixture_selected_at_pin": false,
+    "fixture_run_at_pin": false,
+    "profile_generated_at_pin": false,
+    "profile_examined_at_pin": false
   }
 }
