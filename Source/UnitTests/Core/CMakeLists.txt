@@ -44,6 +44,8 @@ else()
 endif()
 
 target_sources(PowerPCTest PRIVATE
+  ../../Core/Core/PowerPC/CI3/BlockProfile.cpp
+  PowerPC/CI3BlockProfileTest.cpp
   PowerPC/CI3IntegerDifferentialTest.cpp
   PowerPC/TestValues.h
   StubJit.h
