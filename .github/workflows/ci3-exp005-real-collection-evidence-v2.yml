@@ -1,0 +1,163 @@
+name: CI3 EXP-005 Real Collection Evidence v2
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "docs/ci3/experiments/EXP-20260817-005/collection-aggregate-v2.json"
+      - "docs/ci3/experiments/EXP-20260817-005/collection-verdict-v2.json"
+      - "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-runtime.json"
+      - "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-manifest.json"
+      - "docs/ci3/experiments/EXP-20260817-005/real-collection-v2.md"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-evidence:
+    name: validate-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Check out bounded evidence
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate collection evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 875e8be379eb58b05b851a705b43e3f3b8a9c070 HEAD
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          exp = Path("docs/ci3/experiments/EXP-20260817-005")
+          aggregate_path = exp / "collection-aggregate-v2.json"
+          verdict_path = exp / "collection-verdict-v2.json"
+          runtime_path = exp / "real-collection-v2-runtime.json"
+          manifest_path = exp / "real-collection-v2-manifest.json"
+          summary_path = exp / "real-collection-v2.md"
+          paths = [aggregate_path, verdict_path, runtime_path, manifest_path, summary_path]
+          assert all(path.is_file() for path in paths)
+
+          load = lambda path: json.loads(path.read_text())
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          aggregate = load(aggregate_path)
+          verdict = load(verdict_path)
+          runtime = load(runtime_path)
+          manifest = load(manifest_path)
+
+          assert verdict["gate_passed"] is True
+          assert verdict["run_count"] == 160
+          assert verdict["measured_pair_count"] == 64
+          assert verdict["stable_fixture_profile_count"] == 8
+          assert verdict["analysis_performed"] is False
+          assert verdict["performance_claim_made"] is False
+
+          assert aggregate["stage"] == "complete_collection_after_profile_validation"
+          assert aggregate["freeze_merge_commit"] == (
+              "278e2b4a36835fbdfbcd65ba87017f8fa0ea3f17"
+          )
+          assert aggregate["schedule_sha256"] == (
+              "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85"
+          )
+          assert len(aggregate["runs"]) == 160
+          assert len(aggregate["profiles"]) == 8
+          assert len(aggregate["profile_stability"]) == 8
+          assert aggregate["data_boundary"] == {
+              "absolute_paths_retained": False,
+              "fixture_binaries_retained": False,
+              "measured_profiles_opened_before_preflight": False,
+              "raw_logs_retained": False,
+              "user_directories_retained": False,
+          }
+
+          assert runtime["gate_passed"] is True
+          assert runtime["run_count"] == 160
+          assert runtime["measured_pair_count"] == 64
+          assert runtime["stable_fixture_profile_count"] == 8
+          assert runtime["analysis_performed"] is False
+          assert runtime["performance_claim_made"] is False
+          assert runtime["private_collection_state_retained"] is False
+          assert runtime["collection_aggregate_sha256"] == sha(aggregate_path)
+          assert runtime["collection_verdict_sha256"] == sha(verdict_path)
+
+          assert manifest["gate_passed"] is True
+          assert manifest["analysis_performed"] is False
+          assert manifest["performance_claim_made"] is False
+          assert manifest["decision"] == (
+              "PASS_COLLECTION_AND_PROCEED_TO_SEPARATE_ANALYSIS_GATE"
+          )
+          expected_outputs = {
+              "collection-aggregate-v2.json": aggregate_path,
+              "collection-verdict-v2.json": verdict_path,
+              "real-collection-v2-runtime.json": runtime_path,
+              "real-collection-v2.md": summary_path,
+          }
+          assert set(manifest["outputs"]) == set(expected_outputs)
+          for name, path in expected_outputs.items():
+              assert manifest["outputs"][name]["sha256"] == sha(path)
+
+          forbidden_key_fragments = (
+              "guest_address", "instruction_word", "instruction_bytes", "disassembly",
+              "ordered_trace", "title_id", "user_identifier",
+              "guest_pc", "physical_address",
+          )
+          def walk(value):
+              if isinstance(value, dict):
+                  for key, child in value.items():
+                      lowered = str(key).lower()
+                      assert not any(fragment in lowered for fragment in forbidden_key_fragments)
+                      walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child)
+              elif isinstance(value, str):
+                  assert "/home/runner/" not in value
+                  assert "/Users/runner/" not in value
+          walk(aggregate)
+          assert "speedup" not in summary_path.read_text().lower()
+          print("bounded real-collection evidence validated")
+          PY
+
+      - name: Enforce exact evidence scope
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA"...HEAD
+          python3 - <<'PY'
+          import os
+          import subprocess
+
+          allowed_initial = {
+              ".github/workflows/ci3-exp005-real-collection-v2.yml",
+              ".github/workflows/ci3-exp005-real-collection-evidence-v2.yml",
+              "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-plan.md",
+          }
+          allowed_evidence = {
+              "docs/ci3/experiments/EXP-20260817-005/collection-aggregate-v2.json",
+              "docs/ci3/experiments/EXP-20260817-005/collection-verdict-v2.json",
+              "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-runtime.json",
+              "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-manifest.json",
+              "docs/ci3/experiments/EXP-20260817-005/real-collection-v2.md",
+          }
+          actual = set(subprocess.check_output(
+              ["git", "diff", "--name-only", f"{os.environ['BASE_SHA']}...HEAD"], text=True
+          ).splitlines())
+          expected = allowed_initial | allowed_evidence
+          if actual != expected:
+              raise SystemExit(
+                  f"unexpected evidence scope: missing={sorted(expected-actual)}, "
+                  f"extra={sorted(actual-expected)}"
+              )
+          PY

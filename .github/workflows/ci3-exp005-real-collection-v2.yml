@@ -1,0 +1,403 @@
+name: CI3 EXP-005 Real Collection v2
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/ci3-exp005-real-collection-v2.yml"
+      - "docs/ci3/experiments/EXP-20260817-005/real-collection-v2-plan.md"
+      - "Tools/ci3/exp005/collect_exp005.py"
+      - "docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json"
+      - "docs/ci3/experiments/EXP-20260817-005/run-order-v2.json"
+      - "Source/Core/Core/PowerPC/CI3/**"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci3-exp005-real-collection-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  collect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Check out candidate and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify merged prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 875e8be379eb58b05b851a705b43e3f3b8a9c070 HEAD
+          test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
+          python3 Tools/ci3/exp005/collect_exp005.py check-frozen --repository .
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          exp = Path("docs/ci3/experiments/EXP-20260817-005")
+          manifest = json.loads((exp / "fixture-manifest-v2.json").read_text())
+          schedule = exp / "run-order-v2.json"
+          assert manifest["state"] == "FROZEN_BEFORE_PROFILE_ACCESS"
+          assert len(manifest["fixtures"]) == 8
+          assert manifest["measurement"]["total_scheduled_runs"] == 160
+          assert hashlib.sha256(schedule.read_bytes()).hexdigest() == (
+              "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85"
+          )
+          print("merged real-collection prerequisites verified")
+          PY
+
+      - name: Install host build tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libudev-dev
+
+      - name: Rebuild and verify the eight frozen fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/ci3-real-collection-env
+          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+              Path("docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json").read_text()
+          )
+          print("HWTESTS_COMMIT=" + manifest["source"]["commit"])
+          print("TOOLCHAIN=" + manifest["source"]["toolchain_repository_digest"])
+          print("TARGETS=" + " ".join(f["source"]["build_target"] for f in manifest["fixtures"]))
+          PY
+          source /tmp/ci3-real-collection-env
+
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git hwtests
+          git -C hwtests checkout --detach "$HWTESTS_COMMIT"
+          git -C hwtests submodule update --init --recursive
+          test "$(git -C hwtests rev-parse HEAD)" = "$HWTESTS_COMMIT"
+
+          docker pull "$TOOLCHAIN"
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -v "$PWD/hwtests:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc "
+              set -euo pipefail
+              cmake -S . -B build -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo
+              cmake --build build --parallel 2 --target $TARGETS
+            "
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path.cwd()
+          manifest = json.loads(
+              Path("docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json").read_text()
+          )
+
+          def sha256(path):
+              digest = hashlib.sha256()
+              with path.open("rb") as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          for fixture in manifest["fixtures"]:
+              path = root / "hwtests" / fixture["source"]["relative_output"]
+              assert path.is_file(), path
+              assert path.stat().st_size == fixture["build"]["binary_size_bytes"], path
+              assert sha256(path) == fixture["build"]["binary_sha256"], path
+          print("all eight frozen fixture hashes verified")
+          PY
+
+      - name: Configure no-GUI Dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/ci3-exp005-real-collection \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISTRIBUTOR=CI3-PIR \
+            -DUSE_SYSTEM_LIBS=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_QT=OFF \
+            -DENABLE_NOGUI=ON \
+            -DENABLE_HEADLESS=ON \
+            -DENABLE_X11=OFF \
+            -DENABLE_EGL=OFF \
+            -DENABLE_VULKAN=OFF \
+            -DENABLE_LLVM=OFF \
+            -DENABLE_ALSA=OFF \
+            -DENABLE_PULSEAUDIO=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_SDL=OFF \
+            -DENABLE_HWDB=OFF \
+            -DENABLE_EVDEV=OFF \
+            -DUSE_UPNP=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_MGBA=OFF \
+            -DUSE_RETRO_ACHIEVEMENTS=OFF \
+            -DENABLE_AUTOUPDATE=OFF \
+            -DENABLE_ANALYTICS=OFF \
+            -DENCODE_FRAMEDUMPS=OFF
+
+      - name: Build no-GUI Dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ninja -C build/ci3-exp005-real-collection -t targets all | grep -q '^dolphin-emu-nogui:'; then
+            target=dolphin-emu-nogui
+          elif ninja -C build/ci3-exp005-real-collection -t targets all | grep -q '^dolphin-nogui:'; then
+            target=dolphin-nogui
+          else
+            echo "No known no-GUI target was generated." >&2
+            exit 1
+          fi
+          cmake --build build/ci3-exp005-real-collection --target "$target" --parallel 4
+          find build/ci3-exp005-real-collection -type f -perm -111 -iname '*dolphin*nogui*' \
+            -print -quit > ci3-real-collection-dolphin.txt
+          test -s ci3-real-collection-dolphin.txt
+          "$(cat ci3-real-collection-dolphin.txt)" --help >/dev/null 2>&1 || true
+
+      - name: Execute and seal the exact 160-run collection
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -rf ci3-real-collection-output
+          set +e
+          python3 Tools/ci3/exp005/collect_exp005.py collect \
+            --repository "$PWD" \
+            --dolphin "$(cat ci3-real-collection-dolphin.txt)" \
+            --fixtures-root "$PWD/hwtests" \
+            --output-root "$PWD/ci3-real-collection-output"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > ci3-real-collection-exit-status.txt
+          exit 0
+
+      - name: Validate bounded collection result
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat ci3-real-collection-exit-status.txt)" = "0"
+          test ! -e ci3-real-collection-output/private
+          test -f ci3-real-collection-output/bounded/collection-aggregate.json
+          test -f ci3-real-collection-output/bounded/collection-verdict.json
+
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+
+          root = Path("ci3-real-collection-output/bounded")
+          aggregate_path = root / "collection-aggregate.json"
+          verdict_path = root / "collection-verdict.json"
+          aggregate = json.loads(aggregate_path.read_text())
+          verdict = json.loads(verdict_path.read_text())
+
+          assert verdict["gate_passed"] is True
+          assert verdict["run_count"] == 160
+          assert verdict["measured_pair_count"] == 64
+          assert verdict["stable_fixture_profile_count"] == 8
+          assert verdict["analysis_performed"] is False
+          assert verdict["performance_claim_made"] is False
+          assert verdict["decision"] == (
+              "PASS_COLLECTION_INTEGRITY_AND_PROCEED_TO_SEPARATE_ANALYSIS_GATE"
+          )
+
+          assert aggregate["stage"] == "complete_collection_after_profile_validation"
+          assert aggregate["freeze_merge_commit"] == (
+              "278e2b4a36835fbdfbcd65ba87017f8fa0ea3f17"
+          )
+          assert aggregate["schedule_sha256"] == (
+              "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85"
+          )
+          assert len(aggregate["runs"]) == 160
+          assert len(aggregate["profiles"]) == 8
+          assert len(aggregate["profile_stability"]) == 8
+          assert aggregate["data_boundary"] == {
+              "absolute_paths_retained": False,
+              "fixture_binaries_retained": False,
+              "measured_profiles_opened_before_preflight": False,
+              "raw_logs_retained": False,
+              "user_directories_retained": False,
+          }
+
+          forbidden_key_fragments = (
+              "guest_address", "instruction_word", "instruction_bytes", "disassembly",
+              "ordered_trace", "title_id", "user_identifier",
+              "guest_pc", "physical_address",
+          )
+          def walk(value):
+              if isinstance(value, dict):
+                  for key, child in value.items():
+                      lowered = str(key).lower()
+                      assert not any(fragment in lowered for fragment in forbidden_key_fragments)
+                      walk(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      walk(child)
+              elif isinstance(value, str):
+                  assert "/home/runner/" not in value
+                  assert str(Path.cwd()) not in value
+          walk(aggregate)
+
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          runtime = {
+              "schema_version": 1,
+              "experiment_id": "EXP-20260817-005",
+              "stage": "real_collection_v2",
+              "gate_passed": True,
+              "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "tested_merge_ref": subprocess.check_output(
+                  ["git", "rev-parse", "HEAD"], text=True
+              ).strip(),
+              "tested_pr_head": os.environ.get("PR_HEAD_SHA", ""),
+              "runner": {
+                  "label": os.environ.get("RUNNER_NAME", ""),
+                  "os": os.environ.get("RUNNER_OS", ""),
+                  "architecture": os.environ.get("RUNNER_ARCH", ""),
+                  "platform": platform.platform(),
+              },
+              "fixture_source_commit": (
+                  "f28077b139eec18967f60db6ce1e15b182dfeac0"
+              ),
+              "toolchain_repository_digest": (
+                  "devkitpro/devkitppc@sha256:"
+                  "44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+              ),
+              "collection_aggregate_sha256": sha(aggregate_path),
+              "collection_verdict_sha256": sha(verdict_path),
+              "run_count": 160,
+              "measured_pair_count": 64,
+              "stable_fixture_profile_count": 8,
+              "analysis_performed": False,
+              "performance_claim_made": False,
+              "private_collection_state_retained": False,
+          }
+          runtime_path = root / "real-collection-v2-runtime.json"
+          runtime_path.write_text(json.dumps(runtime, indent=2, sort_keys=True) + "\n")
+
+          summary = "\n".join([
+              "# EXP-20260817-005 real collection v2",
+              "",
+              "**Collection gate: PASS.**",
+              "",
+              f"- Workflow run: `{runtime['workflow_run_id']}`",
+              f"- Tested merge ref: `{runtime['tested_merge_ref']}`",
+              f"- Tested PR head: `{runtime['tested_pr_head']}`",
+              "- Scheduled and sealed runs: 160",
+              "- Measured pairs: 64",
+              "- Stable aggregate profiles: 8 of 8 fixtures",
+              "- Analysis performed: no",
+              "- Performance claim made: no",
+              "- Private collection state retained: no",
+              "",
+              "The merged fail-closed harness completed the exact frozen schedule and opened measured",
+              "profiles only after the complete unopened-profile preflight passed. This result",
+              "authorizes a separate analysis gate over the bounded aggregate artifact. It does not",
+              "itself establish acceptable overhead, representative coverage, lowering value,",
+              "Dolphin performance, game playability, iPhone viability, or Gate 2 completion.",
+              "",
+          ])
+          (root / "real-collection-v2.md").write_text(summary)
+          manifest = {
+              "schema_version": 1,
+              "experiment_id": "EXP-20260817-005",
+              "stage": "real_collection_v2",
+              "gate_passed": True,
+              "workflow_run_id": runtime["workflow_run_id"],
+              "tested_merge_ref": runtime["tested_merge_ref"],
+              "tested_pr_head": runtime["tested_pr_head"],
+              "outputs": {
+                  path.name: {"sha256": sha(path)}
+                  for path in (
+                      aggregate_path,
+                      verdict_path,
+                      runtime_path,
+                      root / "real-collection-v2.md",
+                  )
+              },
+              "analysis_performed": False,
+              "performance_claim_made": False,
+              "decision": "PASS_COLLECTION_AND_PROCEED_TO_SEPARATE_ANALYSIS_GATE",
+          }
+          (root / "real-collection-v2-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          print("bounded real collection validated")
+          PY
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Record bounded failure state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ci3-real-collection-artifact
+          if test -d ci3-real-collection-output/bounded; then
+            cp -R ci3-real-collection-output/bounded/. ci3-real-collection-artifact/
+          fi
+          cp ci3-real-collection-exit-status.txt ci3-real-collection-artifact/
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("ci3-real-collection-artifact/artifact-boundary.json")
+          path.write_text(json.dumps({
+              "schema_version": 1,
+              "workflow_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "contains_private_collection_state": False,
+              "contains_fixture_binaries": False,
+              "contains_raw_logs": False,
+              "contains_user_directories": False,
+              "contains_analysis": False,
+          }, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Upload bounded collection evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-real-collection-v2
+          path: ci3-real-collection-artifact
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce collection gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat ci3-real-collection-exit-status.txt)" = "0"
+          test -f ci3-real-collection-artifact/collection-verdict.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          verdict = json.loads(
+              Path("ci3-real-collection-artifact/collection-verdict.json").read_text()
+          )
+          assert verdict["gate_passed"] is True
+          assert verdict["analysis_performed"] is False
+          assert verdict["performance_claim_made"] is False
+          PY
