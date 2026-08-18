@@ -400,10 +400,21 @@ def load_frozen_experiment(manifest_path: Path, schedule_path: Path, *, require_
 
 
 def normalize_route_output(text: str, *, repository: Path, user_directory: Path, fixture: Path) -> str:
-    for old, replacement in (
-        (str(repository.resolve()), "<REPO>"),
-        (str(user_directory.resolve()), "<USERDIR>"),
-        (str(fixture.resolve()), "<FIXTURE>"),
+    path_replacements: list[tuple[str, str]] = []
+    for path, replacement in (
+        (repository, "<REPO>"),
+        (user_directory, "<USERDIR>"),
+        (fixture, "<FIXTURE>"),
+    ):
+        path_replacements.extend(
+            (spelling, replacement)
+            for spelling in {str(path), str(path.resolve())}
+            if spelling
+        )
+    # Replace nested paths before their parents, and handle macOS aliases such as
+    # /var versus /private/var without weakening the normalized route contract.
+    for old, replacement in sorted(
+        path_replacements, key=lambda item: len(item[0]), reverse=True
     ):
         text = text.replace(old, replacement)
     text = text.replace("\r\n", "\n").replace("\x00", "")
