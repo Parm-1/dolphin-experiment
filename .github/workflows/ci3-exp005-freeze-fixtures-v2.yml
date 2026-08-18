@@ -1,0 +1,149 @@
+name: CI3 EXP-005 Fixture Freeze v2
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/ci3-exp005-freeze-fixtures-v2.yml"
+      - "Tools/ci3/exp005/freeze_fixture_manifest.py"
+      - "docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json"
+      - "docs/ci3/experiments/EXP-20260817-005/run-order-v2.json"
+      - "docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2.md"
+      - "docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2-evidence.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-freeze:
+    name: validate-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - name: Check out candidate freeze
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify prerequisite and deterministic outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 4b67e513f913c77e534aaf50d6b7ecae8780d7b2 HEAD
+          test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
+          python3 -m py_compile Tools/ci3/exp005/freeze_fixture_manifest.py
+          python3 Tools/ci3/exp005/freeze_fixture_manifest.py --check
+
+      - name: Independent structural audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from collections import Counter, defaultdict
+          from pathlib import Path
+
+          exp = Path('docs/ci3/experiments/EXP-20260817-005')
+          manifest = json.loads((exp / 'fixture-manifest-v2.json').read_text())
+          schedule = json.loads((exp / 'run-order-v2.json').read_text())
+          evidence = json.loads((exp / 'fixture-freeze-v2-evidence.json').read_text())
+          expected = [
+              ('F01', 'cputest_rlw', 'integer_control'),
+              ('F02', 'cputest_cr', 'integer_control'),
+              ('F03', 'cputest_load', 'memory_system'),
+              ('F04', 'cputest_mtspr', 'memory_system'),
+              ('F05', 'cputest_frsp', 'floating_paired'),
+              ('F06', 'cputest_pairedmove', 'floating_paired'),
+              ('F07', 'gxtest_bitfield', 'gpu_pipeline'),
+              ('F08', 'gxtest_tev', 'gpu_pipeline'),
+          ]
+          observed = [(f['fixture_id'], f['candidate_id'], f['workload_class']) for f in manifest['fixtures']]
+          assert observed == expected
+          assert manifest['state'] == 'FROZEN_BEFORE_PROFILE_ACCESS'
+          assert all(value is False for value in manifest['data_boundary'].values())
+          assert Counter(x[2] for x in observed) == Counter({
+              'integer_control': 2, 'memory_system': 2,
+              'floating_paired': 2, 'gpu_pipeline': 2,
+          })
+          assert all(f['route_qualification']['repetitions'] == 3 for f in manifest['fixtures'])
+          assert all(f['route_qualification']['profile_created_while_disabled'] is False for f in manifest['fixtures'])
+
+          warmups, measured = schedule['warmups'], schedule['measured']
+          assert len(warmups) == 32 and len(measured) == 128
+          assert [run['run_index'] for run in warmups + measured] == list(range(160))
+          warm_by_fixture = defaultdict(list)
+          for run in warmups:
+              warm_by_fixture[run['fixture_id']].append(run['condition'])
+          assert all(order == ['baseline', 'treatment', 'treatment', 'baseline'] for order in warm_by_fixture.values())
+
+          pairs, positions, firsts = defaultdict(list), defaultdict(set), defaultdict(list)
+          for run in measured:
+              pairs[run['pair_id']].append(run)
+              positions[run['fixture_id']].add(run['fixture_ordinal_in_round'])
+              if run['pair_position'] == 1:
+                  firsts[run['fixture_id']].append(run['condition'])
+          assert len(pairs) == 64
+          for runs in pairs.values():
+              runs.sort(key=lambda run: run['pair_position'])
+              assert len(runs) == 2
+              assert {run['condition'] for run in runs} == {'baseline', 'treatment'}
+              assert runs[1]['run_index'] == runs[0]['run_index'] + 1
+          expected_first = ['baseline', 'treatment', 'treatment', 'baseline', 'treatment', 'baseline', 'baseline', 'treatment']
+          for fixture_id, _, _ in expected:
+              assert positions[fixture_id] == set(range(1, 9))
+              assert firsts[fixture_id] == expected_first
+              assert Counter(firsts[fixture_id]) == Counter({'baseline': 4, 'treatment': 4})
+
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          assert manifest['measurement']['schedule_sha256'] == sha(exp / 'run-order-v2.json')
+          for name, record in evidence['outputs'].items():
+              assert record['sha256'] == sha(exp / name)
+          assert evidence['gate_passed'] is True
+          assert evidence['decision'] == 'PASS_FREEZE_AND_PROCEED_TO_FAIL_CLOSED_COLLECTION_HARNESS'
+          print('independent fixture-freeze audit passed')
+          PY
+
+      - name: Enforce exact publication scope
+        if: runner.os == 'Linux' && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA"...HEAD
+          python3 - <<'PY'
+          import os
+          import subprocess
+          expected = {
+              '.github/workflows/ci3-exp005-freeze-fixtures-v2.yml',
+              'Tools/ci3/exp005/freeze_fixture_manifest.py',
+              'docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json',
+              'docs/ci3/experiments/EXP-20260817-005/run-order-v2.json',
+              'docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2.md',
+              'docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2-evidence.json',
+          }
+          actual = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', f"{os.environ['BASE_SHA']}...HEAD"], text=True
+          ).splitlines())
+          if actual != expected:
+              raise SystemExit(f'unexpected scope: missing={sorted(expected-actual)}, extra={sorted(actual-expected)}')
+          PY
+
+      - name: Upload bounded freeze evidence
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-fixture-freeze-v2
+          path: |
+            docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json
+            docs/ci3/experiments/EXP-20260817-005/run-order-v2.json
+            docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2.md
+            docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2-evidence.json
+          if-no-files-found: error
+          retention-days: 30
