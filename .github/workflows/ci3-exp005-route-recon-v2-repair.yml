@@ -1,0 +1,46 @@
+name: CI3 Repair Route Reconnaissance v2 CLI
+
+on:
+  push:
+    branches:
+      - ci3/exp005-route-recon-v2
+    paths:
+      - ".github/workflows/ci3-exp005-route-recon-v2-repair.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-route-recon-v2
+          fetch-depth: 0
+      - name: Remove unsupported no-GUI batch flag and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/ci3-exp005-route-recon-v2.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old = "str(binary), '-b', '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',"
+          new = "str(binary), '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one old CLI fragment, found {text.count(old)}')
+          workflow.write_text(text.replace(old, new), encoding='utf-8')
+          Path('.github/workflows/ci3-exp005-route-recon-v2-repair.yml').unlink()
+          PY
+          git diff --check
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            .github/workflows/ci3-exp005-route-recon-v2.yml \
+            .github/workflows/ci3-exp005-route-recon-v2-repair.yml
+          git commit \
+            -m 'CI3: correct no-GUI route invocation' \
+            -m 'Remove the unsupported -b flag after the first route run proved current dolphin-emu-nogui rejects it before emulation. Candidate set, thresholds, hashes, timeout, and interpretation boundaries are unchanged.'
+          git push origin HEAD:ci3/exp005-route-recon-v2
