@@ -1,0 +1,29 @@
+{
+  "branch": "ci3/exp005-fixture-build-v1",
+  "commit_message": "CI3: repair pinned hwtests build invocation",
+  "expected_blob_sha": "598435113fa9ba3bd1bcc679d08fd2fcb6e8e03b",
+  "path": ".github/workflows/ci3-exp005-fixture-build.yml",
+  "replacements": [
+    {
+      "old": "            powerpc-eabi-gcc --version | head -1",
+      "new": "            \"$DEVKITPPC/bin/powerpc-eabi-gcc\" --version | head -1"
+    },
+    {
+      "old": "            powerpc-eabi-ld --version | head -1",
+      "new": "            \"$DEVKITPPC/bin/powerpc-eabi-ld\" --version | head -1"
+    },
+    {
+      "old": "            bash -lc 'set -o pipefail; make -j2' \\",
+      "new": "            bash -lc 'set -o pipefail; MAKEFLAGS=-j2 ./build.sh' \\",
+      "count": 1
+    },
+    {
+      "old": "                  'command': \"docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'make -j2'\",",
+      "new": "                  'command': \"docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'MAKEFLAGS=-j2 ./build.sh'\","
+    },
+    {
+      "old": "              '- Build command: root `make -j2` inside the recorded devkitPPC container',",
+      "new": "              '- Build command: upstream `./build.sh` with `MAKEFLAGS=-j2` inside the recorded devkitPPC container',"
+    }
+  ]
+}
