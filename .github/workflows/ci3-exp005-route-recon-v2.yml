@@ -269,7 +269,7 @@ jobs:
                       'timeout', '--signal=TERM', '--kill-after=5s', '12s',
                       str(binary), '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
                       '-p', 'headless',
-                      '-C', 'Dolphin.Core.CPUCore=2',
+                      '-C', 'Dolphin.Core.CPUCore=5',
                       '-C', 'Dolphin.Core.DSPHLE=True',
                   ]
                   environment = os.environ.copy()
@@ -344,7 +344,7 @@ jobs:
               'repetitions_per_candidate': 3,
               'timeout_seconds': 12,
               'video_backend': 'Null',
-              'cpu_core_configuration': 'Dolphin.Core.CPUCore=2',
+              'cpu_core_configuration': 'Dolphin.Core.CPUCore=5',
               'dsp_configuration': 'Dolphin.Core.DSPHLE=True',
               'candidates': results,
               'qualified_candidate_count': len(qualified),
