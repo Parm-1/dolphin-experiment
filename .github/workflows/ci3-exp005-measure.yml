@@ -1,0 +1,353 @@
+name: CI3 EXP-005 Measurement
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-exp005-measure.yml"
+      - "Tools/ci3/exp005/**"
+      - "docs/ci3/experiments/EXP-20260817-005/analysis-plan-v1.md"
+  push:
+    branches:
+      - ci3/exp005-measure-v1
+    paths:
+      - "docs/ci3/experiments/EXP-20260817-005/RUN_MEASUREMENT"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  analysis-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run preregistered analyzer and runner tests
+        working-directory: Tools/ci3/exp005
+        run: python3 -m unittest -v
+
+  measure:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/ci3/exp005-measure-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Check out measurement branch and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Check measurement trigger
+        id: trigger
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ -f docs/ci3/experiments/EXP-20260817-005/RUN_MEASUREMENT ]]; then
+            echo 'run=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install host build tools
+        if: steps.trigger.outputs.run == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config
+
+      - name: Rebuild exact frozen fixtures
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/ci3-exp005-env
+          import json
+          from pathlib import Path
+          root = Path('docs/ci3/experiments/EXP-20260817-005')
+          build = json.loads((root / 'build-qualification-v1.json').read_text())
+          print('HWTESTS_COMMIT=' + build['source_commit'])
+          print('TOOLCHAIN=' + build['toolchain']['repository_digest'])
+          PY
+          source /tmp/ci3-exp005-env
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git hwtests
+          git -C hwtests checkout --detach "$HWTESTS_COMMIT"
+          git -C hwtests submodule update --init --recursive
+          test "$(git -C hwtests rev-parse HEAD)" = "$HWTESTS_COMMIT"
+          docker pull "$TOOLCHAIN" | tee exp005-toolchain-pull.txt
+          docker run --rm -v "$PWD/hwtests:/work" -w /work "$TOOLCHAIN" \
+            bash -lc 'set -o pipefail; make -j2' 2>&1 | tee exp005-fixture-build.txt
+
+      - name: Create exact route-reconnaissance Dolphin worktree
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dolphin_commit="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('docs/ci3/experiments/EXP-20260817-005/route-recon-v1.json').read_text())
+          print(data['dolphin_commit'])
+          PY
+          )"
+          git worktree add --detach /tmp/dolphin-measure "$dolphin_commit"
+          git -C /tmp/dolphin-measure submodule update --init --recursive
+          test "$(git -C /tmp/dolphin-measure rev-parse HEAD)" = "$dolphin_commit"
+
+      - name: Configure exact no-GUI Dolphin route
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S /tmp/dolphin-measure \
+            -B /tmp/dolphin-measure/build/ci3-exp005 \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISTRIBUTOR=CI3-PIR \
+            -DUSE_SYSTEM_LIBS=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_QT=OFF \
+            -DENABLE_NOGUI=ON \
+            -DENABLE_HEADLESS=ON \
+            -DENABLE_X11=OFF \
+            -DENABLE_EGL=OFF \
+            -DENABLE_VULKAN=OFF \
+            -DENABLE_LLVM=OFF \
+            -DENABLE_ALSA=OFF \
+            -DENABLE_PULSEAUDIO=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_SDL=OFF \
+            -DENABLE_HWDB=OFF \
+            -DENABLE_EVDEV=OFF \
+            -DUSE_UPNP=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_MGBA=OFF \
+            -DUSE_RETRO_ACHIEVEMENTS=OFF \
+            -DENABLE_AUTOUPDATE=OFF \
+            -DENABLE_ANALYTICS=OFF \
+            -DENCODE_FRAMEDUMPS=OFF \
+            2>&1 | tee exp005-dolphin-configure.txt
+
+      - name: Build exact no-GUI Dolphin route
+        if: steps.trigger.outputs.run == 'true'
+        id: dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ninja -C /tmp/dolphin-measure/build/ci3-exp005 -t targets all | grep -q '^dolphin-emu-nogui:'; then
+            target=dolphin-emu-nogui
+          elif ninja -C /tmp/dolphin-measure/build/ci3-exp005 -t targets all | grep -q '^dolphin-nogui:'; then
+            target=dolphin-nogui
+          else
+            echo 'No known no-GUI target.' >&2
+            exit 1
+          fi
+          cmake --build /tmp/dolphin-measure/build/ci3-exp005 --target "$target" --parallel 4 \
+            2>&1 | tee exp005-dolphin-build.txt
+          binary="$(find /tmp/dolphin-measure/build/ci3-exp005 -type f -perm -111 -iname '*dolphin*nogui*' -print -quit)"
+          test -n "$binary"
+          printf 'binary=%s\n' "$binary" >> "$GITHUB_OUTPUT"
+
+      - name: Record measurement host
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'github_run_id=%s\n' "$GITHUB_RUN_ID"
+            printf 'github_run_attempt=%s\n' "$GITHUB_RUN_ATTEMPT"
+            printf 'runner_name=%s\n' "$RUNNER_NAME"
+            uname -a
+            lscpu
+            docker --version
+            cmake --version
+            ninja --version
+            python3 --version
+          } | tee exp005-machine.txt
+
+      - name: Execute frozen warm-up and measured schedule
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
+          python3 Tools/ci3/exp005/run_exp005.py \
+            --repository /tmp/dolphin-measure \
+            --dolphin "${{ steps.dolphin.outputs.binary }}" \
+            --fixtures-root "$PWD/hwtests" \
+            --manifest docs/ci3/experiments/EXP-20260817-005/fixture-manifest.json \
+            --schedule docs/ci3/experiments/EXP-20260817-005/run-order-v1.json \
+            --output-directory exp005-output \
+            --bootstrap-resamples 50000
+
+      - name: Preserve aggregate-only measurement evidence
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import pathlib
+          import platform
+          import subprocess
+
+          repo = pathlib.Path.cwd()
+          experiment = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          results = experiment / 'results-v1'
+          if results.exists():
+              raise SystemExit('results-v1 already exists; create a new result version')
+          results.mkdir()
+
+          def sha256(path: pathlib.Path) -> str:
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          output = repo / 'exp005-output'
+          for name in ('measurement-aggregate.json', 'analysis.json'):
+              (results / name).write_bytes((output / name).read_bytes())
+          profiles_target = results / 'profiles'
+          profiles_target.mkdir()
+          for profile in sorted((output / 'profiles').glob('*.json')):
+              (profiles_target / profile.name).write_bytes(profile.read_bytes())
+
+          analysis = json.loads((results / 'analysis.json').read_text())
+          aggregate = json.loads((results / 'measurement-aggregate.json').read_text())
+          manifest = json.loads((experiment / 'fixture-manifest.json').read_text())
+          schedule = json.loads((experiment / 'run-order-v1.json').read_text())
+          route = json.loads((experiment / 'route-recon-v1.json').read_text())
+          build = json.loads((experiment / 'build-qualification-v1.json').read_text())
+
+          machine_file = repo / 'exp005-machine.txt'
+          measurement_manifest = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'result_version': 1,
+              'date': '2026-08-17',
+              'github_actions': {
+                  'run_id': int(__import__('os').environ['GITHUB_RUN_ID']),
+                  'run_attempt': int(__import__('os').environ['GITHUB_RUN_ATTEMPT']),
+                  'runner': 'ubuntu-24.04',
+              },
+              'dolphin_commit': route['dolphin_commit'],
+              'fixture_source_commit': build['source_commit'],
+              'toolchain_repository_digest': build['toolchain']['repository_digest'],
+              'fixture_manifest_sha256': sha256(experiment / 'fixture-manifest.json'),
+              'run_order_sha256': sha256(experiment / 'run-order-v1.json'),
+              'analysis_plan_sha256': sha256(experiment / 'analysis-plan-v1.md'),
+              'analyzer_sha256': sha256(repo / 'Tools/ci3/exp005/analyze_exp005.py'),
+              'runner_sha256': sha256(repo / 'Tools/ci3/exp005/run_exp005.py'),
+              'machine_record_sha256': sha256(machine_file),
+              'fixture_build_log_sha256': sha256(repo / 'exp005-fixture-build.txt'),
+              'dolphin_configure_log_sha256': sha256(repo / 'exp005-dolphin-configure.txt'),
+              'dolphin_build_log_sha256': sha256(repo / 'exp005-dolphin-build.txt'),
+              'measurement_aggregate_sha256': sha256(results / 'measurement-aggregate.json'),
+              'analysis_sha256': sha256(results / 'analysis.json'),
+              'representative_profile_sha256': {
+                  path.stem: sha256(path) for path in sorted(profiles_target.glob('*.json'))
+              },
+              'raw_logs_committed': False,
+              'built_binaries_committed': False,
+              'absolute_paths_committed': False,
+          }
+          (results / 'measurement-manifest.json').write_text(
+              json.dumps(measurement_manifest, indent=2, sort_keys=True) + '\n'
+          )
+
+          distortion = analysis['distortion_gate']
+          coverage = analysis['coverage']
+          interval = distortion['paired_bootstrap_95_interval']
+          lines = [
+              '# EXP-20260817-005 result v1',
+              '',
+              f"**Decision: `{analysis['decision']}`**",
+              '',
+              '## Profiler distortion',
+              '',
+              f"- Gate: `{distortion['state']}`",
+              f"- Route equivalent: `{str(distortion['route_equivalent']).lower()}`",
+              f"- Overall median paired wall overhead: `{distortion['overall_median_wall_overhead_fraction'] * 100:.4f}%`",
+              f"- Stratified paired-bootstrap 95% interval: `[{interval[0] * 100:.4f}%, {interval[1] * 100:.4f}%]`",
+              f"- Maximum fixture median overhead: `{distortion['maximum_fixture_median_wall_overhead_fraction'] * 100:.4f}%`",
+              '',
+              '## Compilation-weighted coverage',
+              '',
+              f"- Passing workload classes: `{coverage['passing_workload_classes']}`",
+              '',
+              '| Fixture | Supported ops | Run median | Run p75 | Fully supported blocks | Dominant boundary | Proceed band |',
+              '|---|---:|---:|---:|---:|---|---:|',
+          ]
+          for fixture_id, item in coverage['fixtures'].items():
+              lines.append(
+                  f"| `{fixture_id}` | {item['supported_operation_fraction'] * 100:.2f}% | "
+                  f"{item['supported_run_length_median']:.0f} | {item['supported_run_length_p75']:.0f} | "
+                  f"{item['fully_supported_nonempty_block_fraction'] * 100:.2f}% | "
+                  f"`{item['dominant_semantic_feature']}` ({item['dominant_semantic_feature_rate'] * 100:.2f}%) | "
+                  f"{str(item['meets_proceed_band']).lower()} |"
+              )
+          lines.extend([
+              '',
+              '## Interpretation boundary',
+              '',
+              '- Results are compilation-weighted, not execution-weighted.',
+              '- Duplicate recompilations may contribute more than once.',
+              '- Representative schema-v1 profiles are aggregate-only; raw logs and binaries are absent.',
+              '- A proceed verdict authorizes only the smallest controlled lowering experiment.',
+              '- No Dolphin speedup, game, iPhone, thermal, strict-no-codegen, or Gate 2 claim follows.',
+              '',
+          ])
+          (results / 'verdict.md').write_text('\n'.join(lines))
+
+          trigger = experiment / 'RUN_MEASUREMENT'
+          if trigger.exists():
+              trigger.unlink()
+          PY
+
+      - name: Verify result scope and publish
+        if: steps.trigger.outputs.run == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf hwtests exp005-output /tmp/dolphin-measure
+          rm -f \
+            exp005-toolchain-pull.txt exp005-fixture-build.txt \
+            exp005-dolphin-configure.txt exp005-dolphin-build.txt exp005-machine.txt
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          prefix = 'docs/ci3/experiments/EXP-20260817-005/results-v1/'
+          trigger = 'docs/ci3/experiments/EXP-20260817-005/RUN_MEASUREMENT'
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          actual = {line[3:] for line in output.splitlines() if line}
+          if trigger not in actual:
+              raise SystemExit('measurement trigger was not removed')
+          unexpected = sorted(path for path in actual if path != trigger and not path.startswith(prefix))
+          if unexpected:
+              raise SystemExit(f'unexpected result paths: {unexpected}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- docs/ci3/experiments/EXP-20260817-005
+          git commit \
+            -m 'CI3: record EXP-005 paired overhead and coverage result' \
+            -m 'Execute the frozen legal-fixture schedule with identical baseline and aggregate-profiler routes, apply the preregistered stratified paired analysis, and preserve only aggregate timings, representative schema-v1 profiles, hashes, and the bounded verdict.'
+          git push origin HEAD:ci3/exp005-measure-v1
+
+      - name: Upload noncommitted diagnostics
+        if: failure() && steps.trigger.outputs.run == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-measurement-failure
+          path: |
+            exp005-toolchain-pull.txt
+            exp005-fixture-build.txt
+            exp005-dolphin-configure.txt
+            exp005-dolphin-build.txt
+            exp005-machine.txt
+            exp005-output
+          if-no-files-found: warn
+          retention-days: 7
