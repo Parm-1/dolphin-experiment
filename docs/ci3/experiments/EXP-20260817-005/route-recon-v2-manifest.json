@@ -1,0 +1,12 @@
+{
+  "experiment_id": "EXP-20260817-005",
+  "fixture_binaries_committed": false,
+  "gate_passed": true,
+  "github_actions_run_id": 32124068535,
+  "raw_logs_committed": false,
+  "route_result_sha256": "f0cb4bbb718bd442f78e6526d561fb88fbc409ee2fa99546b4391032cc178c94",
+  "route_summary_sha256": "936567efa42fa96c49453829992963be51ede4659d15d1861acfe04d5abeda23",
+  "schema_version": 1,
+  "stage": "route_reconnaissance_v2",
+  "tested_head_sha": "01faa904e1caff3195b2d8185416c9d8f43479b1"
+}
