@@ -1,101 +1,36 @@
 {
-  "query_run_id": 32110226748,
+  "query_run_id": 32119017625,
   "request": {
-    "branch": "ci3/exp005-fixture-build-v1",
-    "request_id": 7,
-    "workflow": "ci3-exp005-fixture-build.yml"
+    "branch": "master",
+    "request_id": 8,
+    "workflow": "ci3-apply-text-replacements.yml"
   },
   "runs": [
     {
-      "conclusion": null,
-      "created_at": "2026-08-18T07:10:36Z",
-      "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "b6d4a3c797044b9dff90aad2f13aa0ae721b8e25",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32110199577",
-      "id": 32110199577,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
-      "run_number": 7,
-      "status": "in_progress",
-      "updated_at": "2026-08-18T07:10:39Z"
-    },
-    {
       "conclusion": "failure",
-      "created_at": "2026-08-18T07:06:54Z",
+      "created_at": "2026-08-18T08:55:42Z",
       "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "c9218bea037e0a973db2de53acd51fcdf3de7e07",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32109913947",
-      "id": 32109913947,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
-      "run_number": 6,
-      "status": "completed",
-      "updated_at": "2026-08-18T07:08:11Z"
-    },
-    {
-      "conclusion": "failure",
-      "created_at": "2026-08-18T06:52:17Z",
-      "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "aab2f7ee8dcfbae7292a499efc2d1464cb1160da",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32108796444",
-      "id": 32108796444,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
-      "run_number": 5,
-      "status": "completed",
-      "updated_at": "2026-08-18T06:53:38Z"
-    },
-    {
-      "conclusion": "failure",
-      "created_at": "2026-08-18T06:41:02Z",
-      "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "cd459478aaccfd49bd7f164a86a826766490d3bf",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32107973898",
-      "id": 32107973898,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
-      "run_number": 4,
-      "status": "completed",
-      "updated_at": "2026-08-18T06:42:00Z"
-    },
-    {
-      "conclusion": "failure",
-      "created_at": "2026-08-18T06:33:33Z",
-      "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "18fd87bb5cc1f31b428c9a882b911903dde35e0b",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32107436772",
-      "id": 32107436772,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
-      "run_number": 3,
-      "status": "completed",
-      "updated_at": "2026-08-18T06:34:07Z"
-    },
-    {
-      "conclusion": "failure",
-      "created_at": "2026-08-18T06:26:37Z",
-      "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "21ccdfe1bb9a7fd20287f6bb76c5af9dccbfcbdc",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32106938218",
-      "id": 32106938218,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
+      "head_branch": "master",
+      "head_sha": "2bfbfdf50a7aa97e06837bb5861c1333c14ffea1",
+      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32118897700",
+      "id": 32118897700,
+      "name": "CI3 Apply Text Replacements",
       "run_number": 2,
       "status": "completed",
-      "updated_at": "2026-08-18T06:27:12Z"
+      "updated_at": "2026-08-18T08:56:18Z"
     },
     {
       "conclusion": "failure",
-      "created_at": "2026-08-18T02:17:44Z",
+      "created_at": "2026-08-18T06:45:25Z",
       "event": "push",
-      "head_branch": "ci3/exp005-fixture-build-v1",
-      "head_sha": "3bfbc5ab1c2c84dc4dd72fe85ef820a4ae881364",
-      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32091320856",
-      "id": 32091320856,
-      "name": "CI3 EXP-005 Fixture Build Qualification",
+      "head_branch": "master",
+      "head_sha": "257edfb4df668cfdecf2b22a5836db2964d695f2",
+      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32108292102",
+      "id": 32108292102,
+      "name": "CI3 Apply Text Replacements",
       "run_number": 1,
       "status": "completed",
-      "updated_at": "2026-08-18T02:18:20Z"
+      "updated_at": "2026-08-18T06:46:02Z"
     }
   ]
 }
