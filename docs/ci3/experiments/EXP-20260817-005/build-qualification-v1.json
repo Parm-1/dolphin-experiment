@@ -7,26 +7,11 @@
     "exit_status": 0,
     "selected_target_count": 20,
     "selected_targets": [
-      "cputest_cr",
-      "cputest_fctiw",
-      "cputest_fctiwz",
-      "cputest_frsp",
-      "cputest_fprf",
-      "cputest_load",
-      "cputest_mtspr",
-      "cputest_nan",
-      "cputest_ni",
-      "cputest_pairedmove",
-      "cputest_reciprocal",
-      "cputest_rlw",
-      "cputest_srawix",
-      "gxtest_bitfield",
-      "gxtest_clipping",
-      "gxtest_copyfilter",
-      "gxtest_intensity",
-      "gxtest_lighting",
-      "gxtest_rasterization",
-      "gxtest_tev"
+      "cputest_cr", "cputest_fctiw", "cputest_fctiwz", "cputest_frsp", "cputest_fprf",
+      "cputest_load", "cputest_mtspr", "cputest_nan", "cputest_ni", "cputest_pairedmove",
+      "cputest_reciprocal", "cputest_rlw", "cputest_srawix", "gxtest_bitfield",
+      "gxtest_clipping", "gxtest_copyfilter", "gxtest_intensity", "gxtest_lighting",
+      "gxtest_rasterization", "gxtest_tev"
     ],
     "successful_workflow_run": 32110199577
   },
@@ -75,10 +60,7 @@
   },
   "qualification_stage": "selected_source_build",
   "repository": "dolphin-emu/hwtests",
-  "runner": {
-    "label": "ubuntu-24.04",
-    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"
-  },
+  "runner": {"label": "ubuntu-24.04", "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"},
   "schema_version": 2,
   "selection_basis": "Pre-profile source classes and build compatibility only; no runtime, coverage, or performance result was available when this target set was frozen.",
   "source_commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
@@ -86,14 +68,7 @@
   "toolchain": {
     "image_id": "sha256:0025a9f42f8b7259beeccf2a33fe2e06f7b79c5895f68e118656fb4531418a52",
     "image_reference_requested": "devkitpro/devkitppc:latest",
-    "reported_environment": [
-      "powerpc-eabi-gcc: powerpc-eabi-gcc (devkitPPC) 16.1.0",
-      "powerpc-eabi-ld: GNU ld (GNU Binutils) 2.46.0.20260210",
-      "cmake: cmake version 3.31.6",
-      "ninja: 1.11.1",
-      "DEVKITPRO=/opt/devkitpro",
-      "DEVKITPPC=/opt/devkitpro/devkitPPC"
-    ],
+    "reported_environment": ["powerpc-eabi-gcc: powerpc-eabi-gcc (devkitPPC) 16.1.0", "powerpc-eabi-ld: GNU ld (GNU Binutils) 2.46.0.20260210", "cmake: cmake version 3.31.6", "ninja: 1.11.1", "DEVKITPRO=/opt/devkitpro", "DEVKITPPC=/opt/devkitpro/devkitPPC"],
     "repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
   }
 }
