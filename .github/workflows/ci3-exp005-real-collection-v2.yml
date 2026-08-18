@@ -358,7 +358,11 @@ jobs:
           if test -d ci3-real-collection-output/bounded; then
             cp -R ci3-real-collection-output/bounded/. ci3-real-collection-artifact/
           fi
-          cp ci3-real-collection-exit-status.txt ci3-real-collection-artifact/
+          if test -f ci3-real-collection-exit-status.txt; then
+            cp ci3-real-collection-exit-status.txt ci3-real-collection-artifact/
+          else
+            printf 'not-started\n' > ci3-real-collection-artifact/ci3-real-collection-exit-status.txt
+          fi
           python3 - <<'PY'
           import json
           import os
