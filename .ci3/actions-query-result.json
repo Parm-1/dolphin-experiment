@@ -1,11 +1,24 @@
 {
-  "query_run_id": 32107484864,
+  "query_run_id": 32107998093,
   "request": {
     "branch": "ci3/exp005-fixture-build-v1",
-    "request_id": 2,
+    "request_id": 3,
     "workflow": "ci3-exp005-fixture-build.yml"
   },
   "runs": [
+    {
+      "conclusion": null,
+      "created_at": "2026-08-18T06:41:02Z",
+      "event": "push",
+      "head_branch": "ci3/exp005-fixture-build-v1",
+      "head_sha": "cd459478aaccfd49bd7f164a86a826766490d3bf",
+      "html_url": "https://github.com/Parm-1/dolphin-experiment/actions/runs/32107973898",
+      "id": 32107973898,
+      "name": "CI3 EXP-005 Fixture Build Qualification",
+      "run_number": 4,
+      "status": "in_progress",
+      "updated_at": "2026-08-18T06:41:06Z"
+    },
     {
       "conclusion": "failure",
       "created_at": "2026-08-18T06:33:33Z",
