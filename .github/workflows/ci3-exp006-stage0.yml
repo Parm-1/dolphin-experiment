@@ -1,0 +1,428 @@
+name: CI3 EXP-006 Stage 0
+
+on:
+  push:
+    branches:
+      - ci3/exp006-stage0-v1
+    paths:
+      - ".github/workflows/ci3-exp006-stage0.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out Stage 0 branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp006-stage0-v1
+          fetch-depth: 0
+
+      - name: Generate the selected Stage 0 artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import pathlib
+          import statistics
+          import textwrap
+          from collections import defaultdict
+
+          repo = pathlib.Path.cwd()
+          exp005 = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          exp006 = repo / 'docs/ci3/experiments/EXP-20260817-006'
+          exp006.mkdir(parents=True, exist_ok=True)
+          action = json.loads((exp005 / 'next-action.json').read_text())
+          action_slug = action['next_action_slug']
+          decision = action['decision']
+          analysis = json.loads((exp005 / 'results-v1/analysis.json').read_text())
+          aggregate = json.loads((exp005 / 'results-v1/measurement-aggregate.json').read_text())
+          fixture_manifest = json.loads((exp005 / 'fixture-manifest.json').read_text())
+
+          def sha256(path: pathlib.Path) -> str:
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          source_pins = {
+              path: sha256(repo / path)
+              for path in (
+                  'Source/Core/Core/PowerPC/PPCAnalyst.h',
+                  'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp',
+                  'Source/Core/Core/PowerPC/CI3/BlockProfile.cpp',
+                  'Source/Core/Core/PowerPC/CI3/BlockProfile.h',
+                  'Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp',
+              )
+          }
+
+          stage0 = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-006',
+              'derived_from_exp005_decision': decision,
+              'action_slug': action_slug,
+              'date': '2026-08-17',
+              'source_file_sha256': source_pins,
+              'implementation_started': False,
+              'performance_measurement_started': False,
+          }
+
+          if action_slug == 'minimum_lowering_v1':
+              supported_names = [
+                  'addi', 'ori', 'oris', 'xori', 'xoris', 'rlwinmx', 'andx', 'andcx', 'orx',
+                  'orcx', 'xorx', 'norx', 'cntlzwx', 'extsbx', 'extshx', 'slwx', 'srwx',
+              ]
+              contract = {
+                  **stage0,
+                  'artifact_kind': 'minimum_lowering_contract',
+                  'record_size_bytes': 8,
+                  'supported_operation_names': supported_names,
+                  'input': 'PPCAnalyst::CodeOp',
+                  'output': 'test-local compact CI3 operation or explicit rejection reason',
+                  'lowering_is_pure': True,
+                  'production_path_enabled': False,
+                  'rejection_reasons': [
+                      'skipped', 'missing_opinfo', 'unsupported_name', 'wrong_operation_type',
+                      'record_bit', 'carry_or_overflow', 'condition_register', 'fprf',
+                      'memory', 'floating_point', 'branch_or_block_end', 'exception',
+                      'timer_or_system_state', 'dynamic_analyzer_boundary',
+                  ],
+                  'run_partition': (
+                      'maximal contiguous lowered operations separated by exact one-operation fallback boundaries'
+                  ),
+                  'first_slice': (
+                      'pure test-compiled lowering and run partitioning; no Cached Interpreter execution hook'
+                  ),
+                  'required_tests': [
+                      'one known encoding per supported form',
+                      'all registered rejection reasons',
+                      'source/destination aliasing',
+                      'immediate sign and rotate-mask packing',
+                      'skipped and broken-block handling',
+                      'maximal-run partitioning and fallback identity',
+                      'round-trip execution against the existing EXP-003 semantic executor',
+                      'three-hosted-target full CI3 regression suite',
+                  ],
+              }
+              (exp006 / 'lowering-contract-v1.json').write_text(
+                  json.dumps(contract, indent=2, sort_keys=True) + '\n'
+              )
+              document = '''# EXP-20260817-006 Stage 0 — minimum lowering contract v1
+
+              The merged EXP-005 decision authorizes only a **pure, test-compiled lowering slice**. No production
+              executor or performance path may be added in this stage.
+
+              ## Exact input and output
+
+              Input is one already analyzed `PPCAnalyst::CodeOp`. Output is either one eight-byte CI3 semantic
+              record for the existing 17 proven forms or one explicit rejection reason. Lowering must not read or
+              mutate `PowerPCState`, memory, timing state, block cache state, or interpreter state.
+
+              ## Partition rule
+
+              A block is partitioned into maximal contiguous lowered runs separated by exact one-operation fallback
+              entries. Skipped operations remain explicit non-executed entries; they may not be silently absorbed.
+              Broken blocks and dynamic end/exception boundaries terminate a lowered run.
+
+              ## First implementation slice
+
+              - New code is compiled only into `PowerPCTest`.
+              - Reuse the merged `IsSupportedOperation` classifier rather than creating a divergent whitelist.
+              - Encode the same eight-byte representation and field semantics established by EXP-003.
+              - Return typed rejection reasons suitable for exact histogram tests.
+              - Differentially execute lowered runs with the test-local EXP-003 executor and existing Interpreter
+                oracle.
+              - Do not modify `CachedInterpreter`, CPU-core selection, block cache, runtime dispatch, or settings.
+
+              ## Review gate
+
+              The slice may merge only after every supported form, every rejection reason, mixed supported/fallback
+              partitioning, aliasing, immediate packing, broken/skipped behavior, and all previous CI3 suites pass
+              on Linux x86-64, Linux ARM64, and Apple ARM64.
+
+              ## Boundary
+
+              Passing proves lowering correctness and partition identity only. It does not establish runtime
+              execution, state-materialization placement, a speedup, game compatibility, device viability, or Gate 2.
+              '''
+              artifact_path = exp006 / 'stage0-minimum-lowering.md'
+              artifact_path.write_text(textwrap.dedent(document), encoding='utf-8')
+
+          elif action_slug == 'subset_expansion_v1':
+              current = {
+                  'addi', 'ori', 'oris', 'xori', 'xoris', 'rlwinmx', 'andx', 'andcx', 'orx',
+                  'orcx', 'xorx', 'norx', 'cntlzwx', 'extsbx', 'extshx', 'slwx', 'srwx',
+              }
+              fixture_class = {
+                  item['fixture_id']: item['workload_class'] for item in fixture_manifest['fixtures']
+              }
+
+              def find_key(root, key):
+                  matches = []
+                  def walk(value):
+                      if isinstance(value, dict):
+                          for name, child in value.items():
+                              if name == key:
+                                  matches.append(child)
+                              walk(child)
+                      elif isinstance(value, list):
+                          for child in value:
+                              walk(child)
+                  walk(root)
+                  if not matches:
+                      raise KeyError(key)
+                  normalized = {json.dumps(match, sort_keys=True) for match in matches}
+                  if len(normalized) != 1:
+                      raise ValueError(f'ambiguous {key}')
+                  return matches[0]
+
+              opcode_by_fixture = {}
+              for fixture_id in fixture_class:
+                  profile = json.loads((exp005 / f'results-v1/profiles/{fixture_id}.json').read_text())
+                  counts = find_key(profile, 'opcode_counts')
+                  opcode_by_fixture[fixture_id] = {
+                      str(name): int(count) for name, count in counts.items()
+                  }
+
+              ranked = []
+              names = sorted({name for counts in opcode_by_fixture.values() for name in counts} - current)
+              for name in names:
+                  fixture_counts = {
+                      fixture_id: counts.get(name, 0)
+                      for fixture_id, counts in opcode_by_fixture.items()
+                      if counts.get(name, 0) > 0
+                  }
+                  class_counts = defaultdict(int)
+                  for fixture_id, count in fixture_counts.items():
+                      class_counts[fixture_class[fixture_id]] += count
+                  ranked.append({
+                      'operation_name': name,
+                      'total_compilation_count': sum(fixture_counts.values()),
+                      'fixture_breadth': len(fixture_counts),
+                      'workload_class_breadth': len(class_counts),
+                      'counts_by_workload_class': dict(sorted(class_counts.items())),
+                      'counts_by_fixture': dict(sorted(fixture_counts.items())),
+                      'semantic_screen': 'UNSCREENED',
+                      'selected': False,
+                      'ranking_key': [
+                          len(class_counts), len(fixture_counts), sum(fixture_counts.values()), name
+                      ],
+                  })
+              ranked.sort(
+                  key=lambda item: (
+                      -item['workload_class_breadth'], -item['fixture_breadth'],
+                      -item['total_compilation_count'], item['operation_name']
+                  )
+              )
+              ranking = {
+                  **stage0,
+                  'artifact_kind': 'measured_unsupported_operation_ranking',
+                  'current_supported_names': sorted(current),
+                  'candidate_count': len(ranked),
+                  'candidates': ranked,
+                  'selection_state': 'RANKED_NOT_SEMANTICALLY_SCREENED',
+                  'maximum_v1_expansion_forms': 8,
+                  'profile_inputs': sorted(f'results-v1/profiles/{fixture_id}.json' for fixture_id in fixture_class),
+              }
+              (exp006 / 'candidate-ranking-v1.json').write_text(
+                  json.dumps(ranking, indent=2, sort_keys=True) + '\n'
+              )
+              lines = [
+                  '# EXP-20260817-006 Stage 0 — measured unsupported-operation ranking v1',
+                  '',
+                  '**State: ranked from merged aggregate profiles; no new form selected.**',
+                  '',
+                  'Ranking order is workload-class breadth, fixture breadth, total compilation count, then',
+                  'operation name. Counts are compilation observations, not execution frequency.',
+                  '',
+                  '| Rank | Operation | Classes | Fixtures | Compilation count | Semantic screen |',
+                  '|---:|---|---:|---:|---:|---|',
+              ]
+              for index, item in enumerate(ranked[:30], start=1):
+                  lines.append(
+                      f"| {index} | `{item['operation_name']}` | {item['workload_class_breadth']} | "
+                      f"{item['fixture_breadth']} | {item['total_compilation_count']} | `UNSCREENED` |"
+                  )
+              lines.extend([
+                  '',
+                  '## Next screen',
+                  '',
+                  'Before selecting at most eight forms, inspect pinned `PPCTables` metadata and Interpreter',
+                  'semantics. Reject memory, FPU, branch, exception, timer, system-state, carry/overflow, and',
+                  'difficult CR/XER forms. Then simulate the selected expansion against the committed aggregate',
+                  'profiles and require the preregistered two-class coverage/run-length band before implementation.',
+                  '',
+                  'No form is selected merely because it ranks highly or is easy to code.',
+                  '',
+              ])
+              artifact_path = exp006 / 'stage0-subset-ranking.md'
+              artifact_path.write_text('\n'.join(lines), encoding='utf-8')
+
+          elif action_slug == 'architecture_redirect_v1':
+              profile_inputs = aggregate['profiles']
+              cost_inputs = {
+                  **stage0,
+                  'artifact_kind': 'architecture_redirect_cost_inputs',
+                  'fixtures': {},
+                  'candidate_architectures': [
+                      'dense_generic_decoded_switch',
+                      'profile_selected_static_superoperations',
+                      'state_carrying_callback_or_tail_dispatch',
+                  ],
+              }
+              for fixture_id, profile in sorted(profile_inputs.items()):
+                  counters = profile['counters']
+                  cost_inputs['fixtures'][fixture_id] = {
+                      'eligible_operations': counters['eligible_operations'],
+                      'supported_operations': counters['supported_operations'],
+                      'eligible_block_lengths': profile['eligible_block_lengths'],
+                      'supported_run_lengths': profile['supported_run_lengths'],
+                      'semantic_feature_counts': profile['semantic_feature_counts'],
+                      'gpr_reuse_distance_counts': profile['gpr_reuse_distance_counts'],
+                      'maximum_live_future_gprs_per_block': profile['maximum_live_future_gprs_per_block'],
+                  }
+              (exp006 / 'architecture-cost-inputs-v1.json').write_text(
+                  json.dumps(cost_inputs, indent=2, sort_keys=True) + '\n'
+              )
+              document = '''# EXP-20260817-006 Stage 0 — architecture redirect comparison
+
+              The current 17-form lowering path is not authorized. Stage 0 freezes three alternatives against the
+              committed workload-shape inputs.
+
+              ## A. Dense generic decoded switch
+
+              Decode every PowerPC operation once into compact IDs plus canonical operands, but call existing
+              Interpreter semantics for complex forms. Model record bytes, one dispatch per operation, state
+              traffic, and fallback indirection. This avoids a narrow supported-run cliff but may retain semantic
+              call overhead.
+
+              ## B. Profile-selected static superoperations
+
+              Generate no runtime host code. Select a bounded library of common decoded-operation sequences from
+              aggregate opcode/run statistics, then execute matching sequences through handwritten static C++
+              handlers. Model match cost, code-size/I-cache growth, coverage, and invalidation neutrality. Reject
+              game-specific or proprietary-derived sequences.
+
+              ## C. State-carrying callback or tail dispatch
+
+              Keep broad semantic callbacks but change the calling convention/executor so guest state remains in
+              locals across safe boundaries. Model compiler/architecture sensitivity, materialization frequency,
+              and the Dispatch Lab musttail evidence without claiming universal portability.
+
+              ## Stage 1 gate
+
+              Build test-local synthetic prototypes over a trace mix derived only from committed aggregate
+              histograms. An alternative may proceed only if it shows at least 20% over the current callback
+              topology, materially fewer forced state boundaries than the rejected design, deterministic
+              equivalence, and bounded record/code size on ARM64 and x86-64.
+
+              No production Dolphin integration, persistence, memory specialization, or device work is authorized.
+              '''
+              artifact_path = exp006 / 'stage0-architecture-redirect.md'
+              artifact_path.write_text(textwrap.dedent(document), encoding='utf-8')
+
+          elif action_slug == 'distortion_remediation_v1':
+              fixture_timing = analysis['distortion_gate']['fixtures']
+              profile_sizes = {
+                  path.stem: path.stat().st_size
+                  for path in sorted((exp005 / 'results-v1/profiles').glob('*.json'))
+              }
+              ablation = {
+                  **stage0,
+                  'artifact_kind': 'profiler_distortion_ablation_plan',
+                  'distortion_gate': analysis['distortion_gate'],
+                  'representative_profile_size_bytes': profile_sizes,
+                  'ablations': [
+                      {'id': 'A0', 'session': 'disabled', 'accumulation': 'none', 'serialization': 'none'},
+                      {'id': 'A1', 'session': 'enabled', 'accumulation': 'scalar counters only', 'serialization': 'none'},
+                      {'id': 'A2', 'session': 'enabled', 'accumulation': 'counters and fixed histograms', 'serialization': 'none'},
+                      {'id': 'A3', 'session': 'enabled', 'accumulation': 'full accumulator', 'serialization': 'none'},
+                      {'id': 'A4', 'session': 'enabled', 'accumulation': 'full accumulator', 'serialization': 'memory only'},
+                      {'id': 'A5', 'session': 'enabled', 'accumulation': 'full accumulator', 'serialization': 'frozen file route'},
+                  ],
+                  'rerun_rule': 'same frozen fixtures, run order, analyzer, and thresholds; write results-v2',
+              }
+              (exp006 / 'distortion-ablation-plan-v1.json').write_text(
+                  json.dumps(ablation, indent=2, sort_keys=True) + '\n'
+              )
+              document = '''# EXP-20260817-006 Stage 0 — profiler distortion ablation plan
+
+              Coverage cannot authorize lowering until the measurement route passes. The ablation matrix isolates
+              session creation, scalar counters, fixed histograms, opcode maps/reuse analysis, serialization, and
+              file output without changing fixture, schedule, route, analyzer, or thresholds.
+
+              Implement each ablation behind a test-only or experimental mode, preserve architectural route
+              equality, and measure the exact frozen schedule as `results-v2`. The original v1 result remains
+              immutable. Optimization is allowed only when it preserves schema-v1 aggregate values and privacy.
+
+              Do not drop expensive fields merely to pass the gate without documenting that the observation
+              contract changed; such a change requires a new schema and protocol version.
+              '''
+              artifact_path = exp006 / 'stage0-distortion-remediation.md'
+              artifact_path.write_text(textwrap.dedent(document), encoding='utf-8')
+          else:
+              raise SystemExit(f'unsupported action: {action_slug}')
+
+          stage0['artifact_path'] = str(artifact_path.relative_to(repo))
+          (exp006 / 'stage0-action.json').write_text(
+              json.dumps(stage0, indent=2, sort_keys=True) + '\n'
+          )
+
+          project_state = (repo / 'docs/ci3/PROJECT_STATE.md').read_text(encoding='utf-8')
+          marker = '## Next workstream\n'
+          replacement = (
+              '## Next workstream\n\n'
+              f'EXP-006 Stage 0 action `{action_slug}` is frozen in `{artifact_path.name}` and '
+              '`stage0-action.json`. Follow that artifact before implementation or measurement.\n\n'
+          )
+          if marker in project_state:
+              start = project_state.index(marker)
+              after = project_state.find('\n## ', start + len(marker))
+              if after == -1:
+                  project_state = project_state[:start] + replacement
+              else:
+                  project_state = project_state[:start] + replacement + project_state[after + 1:]
+          else:
+              project_state += '\n' + replacement
+          (repo / 'docs/ci3/PROJECT_STATE.md').write_text(project_state, encoding='utf-8')
+
+          pathlib.Path('.github/workflows/ci3-exp006-stage0.yml').unlink()
+          PY
+
+      - name: Verify docs-only Stage 0 scope and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          changed = {line[3:] for line in output.splitlines() if line}
+          workflow = '.github/workflows/ci3-exp006-stage0.yml'
+          if workflow not in changed:
+              raise SystemExit('temporary workflow not removed')
+          unexpected = sorted(path for path in changed if path != workflow and not path.startswith('docs/ci3/'))
+          if unexpected:
+              raise SystemExit(f'unexpected paths: {unexpected}')
+          required = {
+              'docs/ci3/experiments/EXP-20260817-006/stage0-action.json',
+              'docs/ci3/PROJECT_STATE.md',
+          }
+          if not required.issubset(changed):
+              raise SystemExit(f'missing required files: {sorted(required - changed)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- docs/ci3 .github/workflows/ci3-exp006-stage0.yml
+          git commit \
+            -m 'CI3: freeze the selected EXP-006 Stage 0 artifact' \
+            -m 'Generate only the source-pinned lowering contract, measured subset ranking, architecture redirect inputs, or profiler ablation plan selected by the mechanically derived EXP-005 action. No implementation or performance measurement begins.'
+          git push origin HEAD:ci3/exp006-stage0-v1
