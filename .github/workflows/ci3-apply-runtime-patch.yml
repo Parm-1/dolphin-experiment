@@ -1,0 +1,55 @@
+name: CI3 Apply Runtime Patch
+
+on:
+  push:
+    branches:
+      - ci3/block-profile-runtime-v1
+    paths:
+      - ".github/workflows/ci3-apply-runtime-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out runtime branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/block-profile-runtime-v1
+          fetch-depth: 0
+
+      - name: Apply exact reviewed patch
+        shell: bash
+        run: |
+          cat > /tmp/ci3-runtime-patch.b64 <<'PAYLOAD'
+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
+          PAYLOAD
+          base64 -d /tmp/ci3-runtime-patch.b64 > /tmp/ci3-runtime-patch.tar.gz
+          printf '%s  %s\n' '79fb4f7055f5a26a1b782f31101a9668b4024f34ce17c588c976d630b2815db8' '/tmp/ci3-runtime-patch.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/ci3-runtime-patch.tar.gz -C .
+          rm -f .github/workflows/ci3-export-runtime-sources.yml
+          rm -f .github/workflows/ci3-apply-runtime-patch.yml
+
+      - name: Verify scope and publish
+        shell: bash
+        run: |
+          git status --short
+          git diff --check
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add \
+            .github/workflows/ci3-powerpc-differential.yml \
+            .github/workflows/ci3-export-runtime-sources.yml \
+            .github/workflows/ci3-apply-runtime-patch.yml \
+            Source/Core/Core/CMakeLists.txt \
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp \
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h \
+            Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp \
+            Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h \
+            Source/UnitTests/Core/CMakeLists.txt \
+            Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp \
+            docs/ci3/experiments/EXP-20260817-004/runtime-v1.md
+          git commit -m 'CI3: integrate opt-in aggregate block profiler' -m 'Add an environment-gated Cached Interpreter collector, explicit orderly-shutdown JSON flush, tested output lifecycle, and three-target CI coverage. The disabled path allocates no profiler and creates no output file. No execution backend or performance claim is introduced.'
+          git push origin HEAD:ci3/block-profile-runtime-v1
