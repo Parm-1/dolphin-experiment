@@ -211,6 +211,7 @@ jobs:
           import os
           import re
           import shutil
+          import signal
           import subprocess
           from pathlib import Path
 
@@ -243,7 +244,7 @@ jobs:
                   (str(fixture.resolve()), '<FIXTURE>'),
               ):
                   text = text.replace(old, new)
-              text = text.replace('\r\n', '\n')
+              text = text.replace('\r\n', '\n').replace('\x00', '')
               for pattern, replacement in volatile_patterns:
                   text = re.sub(pattern, replacement, text)
               text = re.sub(r'[ \t]+', ' ', text)
@@ -266,7 +267,6 @@ jobs:
                   user_dir.mkdir(parents=True)
                   profile_path = run_root / 'ci3-profile.json'
                   command = [
-                      'timeout', '--signal=TERM', '--kill-after=5s', '12s',
                       str(binary), '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
                       '-p', 'headless',
                       '-C', 'Dolphin.Core.CPUCore=5',
@@ -274,7 +274,7 @@ jobs:
                   ]
                   environment = os.environ.copy()
                   environment.pop('DOLPHIN_CI3_BLOCK_PROFILE_PATH', None)
-                  completed = subprocess.run(
+                  process = subprocess.Popen(
                       command,
                       cwd=repo,
                       env=environment,
@@ -283,7 +283,26 @@ jobs:
                       text=True,
                       errors='replace',
                   )
-                  text = completed.stdout
+                  timed_out = False
+                  termination_stage = 'natural_exit'
+                  try:
+                      text, _ = process.communicate(timeout=12)
+                  except subprocess.TimeoutExpired:
+                      timed_out = True
+                      termination_stage = 'first_sigterm'
+                      process.send_signal(signal.SIGTERM)
+                      try:
+                          text, _ = process.communicate(timeout=2)
+                      except subprocess.TimeoutExpired:
+                          termination_stage = 'second_sigterm'
+                          process.send_signal(signal.SIGTERM)
+                          try:
+                              text, _ = process.communicate(timeout=3)
+                          except subprocess.TimeoutExpired:
+                              termination_stage = 'sigkill_after_two_sigterm'
+                              process.kill()
+                              text, _ = process.communicate()
+                  returncode = process.returncode
                   for log in sorted(user_dir.rglob('*.log')):
                       try:
                           text += '\n<LOGFILE>\n' + log.read_text(encoding='utf-8', errors='replace')
@@ -295,8 +314,10 @@ jobs:
                   lower = normalized.lower()
                   runs.append({
                       'repetition': repetition,
-                      'exit_status': completed.returncode,
-                      'timed_out': completed.returncode == 124,
+                      'exit_status': returncode,
+                      'timed_out': timed_out,
+                      'termination_stage': termination_stage,
+                      'process_survived_to_timeout': timed_out,
                       'normalized_sha256': hashlib.sha256(normalized.encode()).hexdigest(),
                       'route_signature_sha256': hashlib.sha256(route_signature.encode()).hexdigest(),
                       'normalized_bytes': len(normalized.encode()),
@@ -310,10 +331,16 @@ jobs:
 
               status_set = {run['exit_status'] for run in runs}
               timeout_set = {run['timed_out'] for run in runs}
+              termination_set = {run['termination_stage'] for run in runs}
               signature_set = {run['route_signature_sha256'] for run in runs}
-              stable = len(status_set) == 1 and len(timeout_set) == 1 and len(signature_set) == 1
+              stable = (
+                  len(status_set) == 1
+                  and len(timeout_set) == 1
+                  and len(termination_set) == 1
+                  and len(signature_set) == 1
+              )
               acceptable = all(
-                  run['exit_status'] in (0, 124, 143)
+                  (run['timed_out'] or run['exit_status'] == 0)
                   and run['normalized_bytes'] > 0
                   and not run['panic_or_crash_seen']
                   and not run['profile_file_created_while_disabled']
@@ -331,7 +358,7 @@ jobs:
           qualified_classes = sorted({item['workload_class'] for item in qualified})
           gate_passed = len(qualified) >= 4 and len(qualified_classes) >= 3
           result = {
-              'schema_version': 2,
+              'schema_version': 3,
               'experiment_id': 'EXP-20260817-005',
               'stage': 'non_profiled_route_reconnaissance_v2',
               'dolphin_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
@@ -339,6 +366,20 @@ jobs:
               'prerequisite_workflow_run': 32110199577,
               'fixture_source_commit': 'f28077b139eec18967f60db6ce1e15b182dfeac0',
               'github_actions_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'invalidated_workflow_runs': [
+                  {
+                      'run_id': 32117017451,
+                      'reason': 'obsolete -b option failed before emulation',
+                  },
+                  {
+                      'run_id': 32119465079,
+                      'reason': 'missing headless platform failed before emulation',
+                  },
+                  {
+                      'run_id': 32121448667,
+                      'reason': 'GNU timeout SIGKILL return was not identified as the preregistered fixed timeout',
+                  },
+              ],
               'profiler_environment_variable': 'unset',
               'profile_output_expected': False,
               'repetitions_per_candidate': 3,
