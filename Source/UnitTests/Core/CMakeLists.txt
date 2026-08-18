@@ -45,6 +45,8 @@ endif()
 
 target_sources(PowerPCTest PRIVATE
   ../../Core/Core/PowerPC/CI3/BlockProfile.cpp
+  ../../Core/Core/PowerPC/CI3/BlockProfileJson.cpp
+  PowerPC/CI3BlockProfileJsonTest.cpp
   PowerPC/CI3BlockProfileTest.cpp
   PowerPC/CI3IntegerDifferentialTest.cpp
   PowerPC/TestValues.h
