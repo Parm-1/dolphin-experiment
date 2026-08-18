@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "experiment_id": "EXP-20260817-005",
+  "repository": "dolphin-emu/hwtests",
+  "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+  "commit_date": "2024-11-24T19:20:01Z",
+  "license_file": "license.txt",
+  "license_file_sha": "d511905c1647a1e311e8b20d5930a37a9c2531cd",
+  "source_license": "GPL-2.0-or-later",
+  "selection": {
+    "rule": "Pin the upstream default-branch head available before any EXP-005 build, route, profile, or performance result is generated or inspected.",
+    "selected_at": "2026-08-18",
+    "reason": "The original PR referenced this prerequisite but never committed it. The pin was reconstructed before qualification from the public upstream repository and is independent of all downstream measurements."
+  },
+  "scope_at_pin": {
+    "source_build_started": false,
+    "fixture_selected": false,
+    "fixture_run": false,
+    "profile_generated": false,
+    "profile_examined": false
+  }
+}
