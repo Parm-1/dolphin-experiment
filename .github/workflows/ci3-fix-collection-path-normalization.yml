@@ -1,0 +1,74 @@
+name: CI3 Apply Collection Path Normalization Fix
+
+on:
+  push:
+    branches:
+      - ci3/exp005-collection-harness-v2
+    paths:
+      - ".github/workflows/ci3-fix-collection-path-normalization.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-collection-harness-v2
+          fetch-depth: 0
+
+      - name: Apply lexical and canonical path normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('Tools/ci3/exp005/collect_exp005.py')
+          text = path.read_text(encoding='utf-8')
+          old = '''    for old, replacement in (
+                  (str(repository.resolve()), "<REPO>"),
+                  (str(user_directory.resolve()), "<USERDIR>"),
+                  (str(fixture.resolve()), "<FIXTURE>"),
+              ):
+                  text = text.replace(old, replacement)
+          '''
+          new = '''    path_replacements: list[tuple[str, str]] = []
+              for path, replacement in (
+                  (repository, "<REPO>"),
+                  (user_directory, "<USERDIR>"),
+                  (fixture, "<FIXTURE>"),
+              ):
+                  path_replacements.extend(
+                      (spelling, replacement)
+                      for spelling in {str(path), str(path.resolve())}
+                      if spelling
+                  )
+              # Replace nested paths before their parents, and handle macOS aliases such as
+              # /var versus /private/var without weakening the normalized route contract.
+              for old, replacement in sorted(
+                  path_replacements, key=lambda item: len(item[0]), reverse=True
+              ):
+                  text = text.replace(old, replacement)
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('expected normalization snippet was not found exactly once')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          workflow = Path('.github/workflows/ci3-fix-collection-path-normalization.yml')
+          workflow.unlink()
+          PY
+          python3 -m py_compile Tools/ci3/exp005/collect_exp005.py
+          rm -rf Tools/ci3/exp005/__pycache__
+          git diff --check
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            Tools/ci3/exp005/collect_exp005.py \
+            .github/workflows/ci3-fix-collection-path-normalization.yml
+          git commit \
+            -m 'CI3: normalize lexical and canonical paths' \
+            -m 'Handle macOS /var and /private/var spellings while replacing nested fixture and user paths before repository roots. This fixes cross-platform route normalization without changing the frozen route contract.'
+          git push origin HEAD:ci3/exp005-collection-harness-v2
