@@ -28,7 +28,10 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           from pathlib import Path
-          data = json.loads(Path('docs/ci3/experiments/EXP-20260817-005/candidate-inventory.json').read_text())
+
+          data = json.loads(
+              Path('docs/ci3/experiments/EXP-20260817-005/candidate-inventory.json').read_text()
+          )
           print('commit=' + data['commit'])
           PY
 
@@ -57,28 +60,51 @@ jobs:
             "$DEVKITPPC/bin/powerpc-eabi-gcc" --version | head -1
             printf "powerpc-eabi-ld: "
             "$DEVKITPPC/bin/powerpc-eabi-ld" --version | head -1
-            printf "make: "
-            make --version | head -1
+            printf "cmake: "
+            cmake --version | head -1
+            printf "ninja: "
+            ninja --version
             printf "DEVKITPRO=%s\nDEVKITPPC=%s\n" "$DEVKITPRO" "$DEVKITPPC"
           ' | tee toolchain-environment.txt
 
-      - name: Build all pinned hwtests
+      - name: Build pre-registered legal fixture targets
         id: build
         shell: bash
         run: |
-          set +e
+          set -euo pipefail
           docker run --rm \
             -v "$PWD/hwtests:/work" \
             -w /work \
             devkitpro/devkitppc:latest \
-            bash -lc 'set -o pipefail; MAKEFLAGS=-j2 ./build.sh' \
-            2>&1 | tee build.txt
-          status=${PIPESTATUS[0]}
-          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
-          exit "$status"
+            bash -lc '
+              set -euo pipefail
+              cmake -S . -B build -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo
+              cmake --build build --parallel 2 --target \
+                cputest_cr \
+                cputest_fctiw \
+                cputest_fctiwz \
+                cputest_frsp \
+                cputest_fprf \
+                cputest_load \
+                cputest_mtspr \
+                cputest_nan \
+                cputest_ni \
+                cputest_pairedmove \
+                cputest_reciprocal \
+                cputest_rlw \
+                cputest_srawix \
+                gxtest_bitfield \
+                gxtest_clipping \
+                gxtest_copyfilter \
+                gxtest_intensity \
+                gxtest_lighting \
+                gxtest_rasterization \
+                gxtest_tev
+            ' 2>&1 | tee build.txt
 
-      - name: Generate build qualification evidence
-        if: success()
+      - name: Generate selected-fixture build evidence
         shell: bash
         env:
           HWTESTS_COMMIT: ${{ steps.source.outputs.commit }}
@@ -94,13 +120,40 @@ jobs:
           import os
           import pathlib
           import platform
-          import subprocess
-          import textwrap
 
           repo = pathlib.Path.cwd()
           source = repo / 'hwtests'
           experiment = repo / 'docs/ci3/experiments/EXP-20260817-005'
           experiment.mkdir(parents=True, exist_ok=True)
+
+          selected_targets = [
+              'cputest_cr',
+              'cputest_fctiw',
+              'cputest_fctiwz',
+              'cputest_frsp',
+              'cputest_fprf',
+              'cputest_load',
+              'cputest_mtspr',
+              'cputest_nan',
+              'cputest_ni',
+              'cputest_pairedmove',
+              'cputest_reciprocal',
+              'cputest_rlw',
+              'cputest_srawix',
+              'gxtest_bitfield',
+              'gxtest_clipping',
+              'gxtest_copyfilter',
+              'gxtest_intensity',
+              'gxtest_lighting',
+              'gxtest_rasterization',
+              'gxtest_tev',
+          ]
+          required_paths = [
+              pathlib.Path('build/cputest') / f'{target}.elf'
+              if target.startswith('cputest_')
+              else pathlib.Path('build/gxtest') / f'{target}.elf'
+              for target in selected_targets
+          ]
 
           def sha256(path: pathlib.Path) -> str:
               digest = hashlib.sha256()
@@ -109,48 +162,37 @@ jobs:
                       digest.update(chunk)
               return digest.hexdigest()
 
-          porcelain = subprocess.check_output(
-              ['git', '-C', str(source), 'status', '--porcelain=v1', '--untracked-files=all'],
-              text=True,
-          )
-          generated_paths: list[pathlib.Path] = []
-          for line in porcelain.splitlines():
-              if not line:
-                  continue
-              rel = line[3:]
-              path = source / rel
-              if path.is_file():
-                  generated_paths.append(path)
+          missing = [str(path) for path in required_paths if not (source / path).is_file()]
+          if missing:
+              raise SystemExit(f'missing required selected outputs: {missing}')
 
-          executable_suffixes = {'.dol', '.elf'}
           executable_outputs = []
-          intermediate_suffix_counts: dict[str, int] = {}
-          for path in sorted(generated_paths):
-              rel = str(path.relative_to(source))
-              suffix = path.suffix.lower() or '<none>'
-              if suffix in executable_suffixes:
-                  executable_outputs.append({
-                      'path': rel,
-                      'size_bytes': path.stat().st_size,
-                      'sha256': sha256(path),
-                      'suffix': suffix,
-                  })
-              else:
-                  intermediate_suffix_counts[suffix] = intermediate_suffix_counts.get(suffix, 0) + 1
+          for target, relative_path in zip(selected_targets, required_paths, strict=True):
+              path = source / relative_path
+              executable_outputs.append({
+                  'target': target,
+                  'path': str(relative_path),
+                  'size_bytes': path.stat().st_size,
+                  'sha256': sha256(path),
+                  'suffix': path.suffix.lower(),
+              })
 
-          if not executable_outputs:
-              raise SystemExit('build completed but produced no .dol or .elf outputs')
-
-          environment_lines = pathlib.Path('toolchain-environment.txt').read_text(encoding='utf-8').splitlines()
+          environment_lines = pathlib.Path('toolchain-environment.txt').read_text(
+              encoding='utf-8'
+          ).splitlines()
           build_log = pathlib.Path('build.txt')
           manifest = {
-              'schema_version': 1,
+              'schema_version': 2,
               'experiment_id': 'EXP-20260817-005',
-              'qualification_stage': 'source_build_only',
-              'date': '2026-08-17',
+              'qualification_stage': 'selected_source_build',
+              'date': '2026-08-18',
               'repository': 'dolphin-emu/hwtests',
               'source_commit': os.environ['HWTESTS_COMMIT'],
               'source_license': 'GPL-2.0-or-later',
+              'selection_basis': (
+                  'Pre-profile source classes and build compatibility only; no runtime, coverage, '
+                  'or performance result was available when this target set was frozen.'
+              ),
               'runner': {
                   'label': 'ubuntu-24.04',
                   'platform': platform.platform(),
@@ -162,24 +204,46 @@ jobs:
                   'reported_environment': environment_lines,
               },
               'build': {
-                  'command': "docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'MAKEFLAGS=-j2 ./build.sh'",
+                  'selected_target_count': len(selected_targets),
+                  'selected_targets': selected_targets,
+                  'configure_command': (
+                      'cmake -S . -B build -G Ninja '
+                      '-DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake '
+                      '-DCMAKE_BUILD_TYPE=RelWithDebInfo'
+                  ),
+                  'build_command': 'cmake --build build --parallel 2 --target <selected_targets>',
                   'exit_status': 0,
                   'build_log_sha256': sha256(build_log),
-                  'generated_file_count': len(generated_paths),
                   'executable_output_count': len(executable_outputs),
-                  'intermediate_suffix_counts': dict(sorted(intermediate_suffix_counts.items())),
+              },
+              'known_full_suite_blocker': {
+                  'full_suite_qualified': False,
+                  'target': 'iostest_ipc_timing',
+                  'classification': 'upstream_toolchain_drift',
+                  'prior_workflow_run': 32108796444,
+                  'diagnostic_artifact_id': 9314124919,
+                  'diagnostic_artifact_sha256': (
+                      '36c6147dc906261d24d32c6924e92019536b1e00f29bee4d4830c0f0265e3981'
+                  ),
+                  'failure_signature': (
+                      'The current libogc ogc/ipc.h macro HW_IPC_PPCMSG collides with the '
+                      'pinned iostest/ipc.cpp enum member of the same name.'
+                  ),
+                  'source_modified': False,
               },
               'executable_outputs': executable_outputs,
               'interpretation': {
-                  'build_qualified': True,
+                  'selected_fixture_set_build_qualified': True,
+                  'full_upstream_suite_build_qualified': False,
                   'route_qualified': False,
                   'profile_data_generated': False,
                   'profile_data_examined': False,
-                  'fixture_selected': False,
+                  'runtime_fixture_selected': False,
               },
               'data_boundary': (
-                  'Only source/toolchain pins, build-log hash, output paths, sizes, and hashes are committed. '
-                  'Built binaries and raw build logs remain uncommitted.'
+                  'Only source/toolchain pins, selected target names, build-log hash, output paths, '
+                  'sizes, hashes, and the known exclusion are committed. Built binaries and raw '
+                  'logs remain uncommitted.'
               ),
           }
           (experiment / 'build-qualification-v1.json').write_text(
@@ -189,44 +253,55 @@ jobs:
           lines = [
               '# EXP-20260817-005 build qualification v1',
               '',
-              '**Verdict: SOURCE BUILD PASS; ROUTE QUALIFICATION NOT STARTED**',
+              '**Verdict: SELECTED LEGAL FIXTURE BUILD PASS; FULL UPSTREAM SUITE TOOLCHAIN-BLOCKED**',
               '',
               f"- Pinned source: `dolphin-emu/hwtests@{os.environ['HWTESTS_COMMIT']}`",
               f"- Recorded toolchain digest: `{os.environ['TOOLCHAIN_REPO_DIGEST']}`",
-              '- Build command: upstream `./build.sh` with `MAKEFLAGS=-j2` inside the recorded devkitPPC container',
-              f'- Executable outputs: {len(executable_outputs)}',
-              f'- Generated files observed: {len(generated_paths)}',
-              f'- Raw build-log SHA-256: `{sha256(build_log)}`',
+              f'- Pre-registered selected targets built: {len(selected_targets)}',
+              f'- Required executable outputs verified: {len(executable_outputs)}',
+              f'- Raw selected-build log SHA-256: `{sha256(build_log)}`',
               '',
-              'The build produced the following locally held executable candidates. Paths, sizes, and hashes',
-              'are metadata only; the binaries are not committed.',
+              'The selected set consists of register/CPU and GX workloads chosen from source classes',
+              'before any profiler, coverage, or performance output was available.',
               '',
-              '| Output | Size (bytes) | SHA-256 |',
-              '|---|---:|---|',
+              '| Target | Output | Size (bytes) | SHA-256 |',
+              '|---|---|---:|---|',
           ]
           for item in executable_outputs:
-              lines.append(f"| `{item['path']}` | {item['size_bytes']} | `{item['sha256']}` |")
+              lines.append(
+                  f"| `{item['target']}` | `{item['path']}` | {item['size_bytes']} | "
+                  f"`{item['sha256']}` |"
+              )
           lines.extend([
+              '',
+              '## Recorded full-suite blocker',
+              '',
+              'A prior attempt to build every pinned upstream target under the same current toolchain',
+              'failed only after the selected CPU/GX targets had begun building. The current libogc',
+              '`ogc/ipc.h` macro `HW_IPC_PPCMSG` collides with the pinned `iostest/ipc.cpp` enum',
+              'member of the same name. The pinned source was not patched. Full-suite qualification',
+              'therefore remains false; the exact run and diagnostic artifact are recorded in the JSON.',
               '',
               '## Interpretation boundary',
               '',
-              '- This proves only that the pinned open-source suite builds in the recorded toolchain.',
-              '- No fixture has been selected, launched, or shown deterministic.',
+              '- This proves only that the explicit selected legal fixture set builds in the recorded toolchain.',
+              '- It does not claim that every upstream hwtests target builds.',
+              '- No fixture has been launched or shown deterministic.',
               '- No profiler environment variable was set.',
               '- No schema-v1 profile was generated or examined.',
               '- Build success is not route qualification, workload representativeness, coverage, overhead,',
               '  lowering correctness, or performance evidence.',
               '',
-              'The next step is source-based candidate classification followed by non-profiled route',
-              'qualification. Exact selected fixtures must still be frozen before profile output is opened.',
+              'The next step is non-profiled route qualification of this selected set. Exact runtime',
+              'fixtures must still be frozen before profile output is opened.',
               '',
           ])
-          (experiment / 'build-qualification-v1.md').write_text('\n'.join(lines), encoding='utf-8')
-
+          (experiment / 'build-qualification-v1.md').write_text(
+              '\n'.join(lines), encoding='utf-8'
+          )
           PY
 
       - name: Verify evidence-only scope and publish
-        if: success()
         shell: bash
         run: |
           set -euo pipefail
@@ -247,12 +322,12 @@ jobs:
           PY
           git config user.name 'Parm-1'
           git config user.email '75600769+Parm-1@users.noreply.github.com'
-          git add -A -- \
+          git add -- \
             docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json \
             docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.md
           git commit \
-            -m 'CI3: qualify pinned legal fixture source build' \
-            -m 'Build the exact pinned Dolphin hwtests source in a recorded devkitPPC container and preserve only toolchain/source pins plus executable output hashes. No fixture is selected or run and no profiler output is generated or examined.'
+            -m 'CI3: qualify selected legal fixture source build' \
+            -m 'Build an explicit pre-profile CPU/GX target set from the pinned Dolphin hwtests source, record output hashes and the current upstream IOS toolchain blocker, and preserve the boundary that the full upstream suite is not qualified.'
           git push origin HEAD:ci3/exp005-fixture-build-v1
 
       - name: Upload diagnostic logs on failure
