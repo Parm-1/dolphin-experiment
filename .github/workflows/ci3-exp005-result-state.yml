@@ -1,0 +1,487 @@
+name: CI3 EXP-005 Result State
+
+on:
+  push:
+    branches:
+      - ci3/exp005-result-state-v1
+    paths:
+      - ".github/workflows/ci3-exp005-result-state.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out result-state branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-result-state-v1
+          fetch-depth: 0
+
+      - name: Derive the bounded next experiment from the merged result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import pathlib
+          import textwrap
+
+          repo = pathlib.Path.cwd()
+          exp005 = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          results = exp005 / 'results-v1'
+          analysis = json.loads((results / 'analysis.json').read_text())
+          measurement = json.loads((results / 'measurement-manifest.json').read_text())
+          fixture_manifest = json.loads((exp005 / 'fixture-manifest.json').read_text())
+
+          decision = analysis['decision']
+          distortion = analysis['distortion_gate']
+          coverage = analysis['coverage']
+          interval = distortion['paired_bootstrap_95_interval']
+          overhead = distortion['overall_median_wall_overhead_fraction']
+          passing_classes = coverage['passing_workload_classes']
+          run_id = measurement['github_actions']['run_id']
+
+          allowed_decisions = {
+              'PROCEED_TO_MINIMUM_LOWERING_EXPERIMENT',
+              'EXPAND_OR_REVISE_SUBSET_BEFORE_LOWERING',
+              'STOP_OR_REDIRECT_CURRENT_BACKEND',
+              'DO_NOT_PROCEED_MEASUREMENT_DISTORTION',
+          }
+          if decision not in allowed_decisions:
+              raise SystemExit(f'unrecognized decision: {decision}')
+
+          action_map = {
+              'PROCEED_TO_MINIMUM_LOWERING_EXPERIMENT': 'minimum_lowering_v1',
+              'EXPAND_OR_REVISE_SUBSET_BEFORE_LOWERING': 'subset_expansion_v1',
+              'STOP_OR_REDIRECT_CURRENT_BACKEND': 'architecture_redirect_v1',
+              'DO_NOT_PROCEED_MEASUREMENT_DISTORTION': 'distortion_remediation_v1',
+          }
+          action_slug = action_map[decision]
+
+          next_action = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'result_version': 1,
+              'decision': decision,
+              'next_action_slug': action_slug,
+              'distortion_gate': distortion['state'],
+              'overall_median_wall_overhead_fraction': overhead,
+              'paired_bootstrap_95_interval': interval,
+              'passing_workload_classes': passing_classes,
+              'fixture_count': fixture_manifest['fixture_count'],
+              'measurement_run_id': run_id,
+              'interpretation': (
+                  'This action is mechanically derived from the merged preregistered analysis. '
+                  'It does not add an execution-weighted or performance claim.'
+              ),
+          }
+          (exp005 / 'next-action.json').write_text(
+              json.dumps(next_action, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+
+          lines = [
+              '# CI3 bounded next action after EXP-20260817-005',
+              '',
+              f"**Measured decision: `{decision}`**",
+              '',
+              f"- Distortion gate: `{distortion['state']}`",
+              f"- Overall median paired wall overhead: `{overhead * 100:.4f}%`",
+              f"- Stratified paired-bootstrap 95% interval: `[{interval[0] * 100:.4f}%, {interval[1] * 100:.4f}%]`",
+              f"- Maximum fixture median overhead: `{distortion['maximum_fixture_median_wall_overhead_fraction'] * 100:.4f}%`",
+              f"- Passing workload classes: `{passing_classes}`",
+              f"- Frozen fixtures: `{fixture_manifest['fixture_count']}`",
+              f"- Measurement workflow run: `{run_id}`",
+              '',
+              f"The next action is `{action_slug}`. It is selected directly by the merged v1 analyzer; no",
+              'threshold, class result, or overhead result has been reinterpreted after the fact.',
+              '',
+              '## Boundary',
+              '',
+              '- Results remain compilation-weighted, not execution-weighted.',
+              '- Duplicate recompilations may contribute more than once.',
+              '- No current result establishes a Dolphin speedup, commercial-game result, iPhone result,',
+              '  thermal result, strict-no-codegen product result, or Gate 2 completion.',
+              '',
+          ]
+          (exp005 / 'NEXT_STEP.md').write_text('\n'.join(lines), encoding='utf-8')
+
+          exp006 = repo / 'docs/ci3/experiments/EXP-20260817-006'
+          exp006.mkdir(parents=True, exist_ok=True)
+
+          if decision == 'PROCEED_TO_MINIMUM_LOWERING_EXPERIMENT':
+              hypothesis = f'''# EXP-20260817-006 hypothesis — minimum runtime lowering v1
+
+              ## Trigger
+
+              The merged EXP-005 analyzer returned `{decision}` after a `{distortion['state']}` distortion gate
+              and passing workload classes `{passing_classes}`.
+
+              This authorizes only the smallest controlled lowering experiment. It is not a speedup claim.
+
+              ## Question
+
+              Can the existing 17-operation, register-only CI3 subset be lowered from already analyzed
+              `PPCAnalyst::CodeOp` blocks into compact pointer-free records and executed behind an experimental,
+              disabled-by-default path while preserving reference behavior and improving representative
+              CPU-backend microbenchmark time over current Cached Interpreter?
+
+              ## Scope
+
+              - Reuse exactly the 17 forms proven in EXP-003.
+              - Lower only contiguous supported runs classified by the merged EXP-004 logic.
+              - Keep unsupported operations, branches, memory, FPU, CR/XER-sensitive forms, exceptions, HLE,
+                breakpoints, and block termination on the existing Cached Interpreter path.
+              - Do not add persistent caching, guarded memory, block linking, superoperations, UI, game-specific
+                paths, or new PowerPC semantics.
+              - The experimental executor must be disabled by default and confined to this fork.
+
+              ## Required implementation slices
+
+              1. Pure lowering from `CodeOp` to the existing eight-byte semantic record with exact rejection
+                 reasons and unit tests.
+              2. Test-local mixed-run executor with explicit state-materialization boundaries and differential
+                 checks after every run and block.
+              3. Disabled-by-default Cached Interpreter integration with fallback identity tests.
+              4. Controlled benchmark against the same source/build/settings and legal fixtures.
+              5. Ablations for compact representation, direct dispatch, and local-state lifetime.
+
+              Each slice must be independently reviewable. Performance measurement is forbidden until the mixed
+              executor passes differential correctness and fallback-boundary tests on all hosted targets.
+
+              ## Correctness gate
+
+              - No unexplained register, CR, XER, PC/NPC, exception, downcount, or broader architectural-state
+                mismatch.
+              - Identical behavior when every operation is forced to fallback.
+              - Exact fallback at skipped, unsupported, debugging, exception, block-end, and lifecycle boundaries.
+              - Existing EXP-003, EXP-004, and EXP-005 tests remain green.
+
+              ## Performance gate
+
+              Under identical builds and routes:
+
+              - at least 20% CPU-backend improvement in a representative legal CPU microbenchmark; and
+              - at least 10% improvement in one distinct legal CPU-limited proxy;
+              - no material regression in any frozen fixture class;
+              - retained raw timing evidence and controlled ablations.
+
+              These are Gate 2 thresholds from the charter, not forecasts. Failure must be recorded and may stop
+              the backend before memory or persistence work.
+
+              ## Falsifiers
+
+              - any semantic mismatch or fallback-boundary discrepancy;
+              - supported-run coverage in the integrated path differs from the frozen aggregate classifier without
+                a documented source-pin reason;
+              - gains disappear when build, settings, or route are matched;
+              - improvement comes from timing, accuracy, renderer, DSP, vertex-loader, or game-specific changes;
+              - the 20%/10% performance gates are not met.
+
+              ## Interpretation boundary
+
+              Passing would establish a minimum register-only runtime result, not a complete backend, broad game
+              compatibility, execution-weighted coverage, iPhone viability, strict no-codegen full speed, or Gate 3.
+
+              ## AI disclosure
+
+              The experiment is substantially AI-assisted and remains confined to the user's fork under Dolphin's
+              current generative-AI policy.
+              '''
+          elif decision == 'EXPAND_OR_REVISE_SUBSET_BEFORE_LOWERING':
+              hypothesis = f'''# EXP-20260817-006 hypothesis — measured subset expansion v1
+
+              ## Trigger
+
+              The merged EXP-005 analyzer returned `{decision}` after a `{distortion['state']}` distortion gate.
+              The current 17-operation subset did not satisfy the preregistered two-class lowering gate.
+
+              ## Question
+
+              Can a small evidence-selected expansion of the semantic subset materially increase
+              compilation-weighted coverage and contiguous supported-run lengths across at least two frozen
+              workload classes without introducing memory, FPU, branch, exception, or difficult XER/CR semantics?
+
+              ## Selection rule
+
+              Use only aggregate opcode counts and boundary distributions from the committed schema-v1 profiles.
+              Rank unsupported operation forms by:
+
+              1. occurrence across distinct workload classes;
+              2. reduction in measured run-breaking boundaries;
+              3. register-only semantics with a public Interpreter oracle;
+              4. absence of memory, FPU, branch, exception, carry/overflow, timing, or system-state requirements;
+              5. minimal record-format growth.
+
+              Select at most 8 additional forms in v1. No operation may be chosen because it is easy to implement
+              if it does not reduce a measured cross-class boundary.
+
+              ## Required controls
+
+              - Precommit the ranked candidate table and selected forms before implementation.
+              - Differentially test fixed edges and at least 12 deterministic 512-operation traces per new form
+                family against Dolphin's Interpreter.
+              - Recompute predicted coverage and run-length histograms from the committed aggregate opcode counts
+                without running a new workload.
+              - Re-run EXP-005 only if the classifier or schema changes; use a new result version.
+
+              ## Proceed gate
+
+              The expanded subset may enter a minimum lowering experiment only if the frozen profiles predict:
+
+              - at least 30% supported eligible operations in two workload classes;
+              - median supported-run length at least 2;
+              - p75 run length at least 4 or at least 10% fully supported nonempty blocks;
+              - no dominant unhandled semantic boundary at or above 50%;
+              - all new differential tests pass on three hosted targets.
+
+              ## Stop condition
+
+              Stop expansion if meeting the gate requires memory/FPU/branch semantics, more than 8 additional
+              forms, or record complexity that erases the compact representation. In that case redirect the
+              architecture rather than growing a second interpreter indiscriminately.
+
+              ## Interpretation boundary
+
+              Passing selects a better semantic subset; it does not establish runtime lowering, a speedup, a game
+              result, device viability, or Gate 2 completion.
+
+              ## AI disclosure
+
+              The experiment is substantially AI-assisted and remains confined to the user's fork.
+              '''
+          elif decision == 'STOP_OR_REDIRECT_CURRENT_BACKEND':
+              hypothesis = f'''# EXP-20260817-006 hypothesis — architecture redirect v1
+
+              ## Trigger
+
+              The merged EXP-005 analyzer returned `{decision}`. The current compact register-only subset lacks
+              enough measured contiguous opportunity to justify production lowering.
+
+              ## Question
+
+              Is there a different no-runtime-codegen architecture—such as a denser generic decoded instruction
+              stream, profile-selected static superoperations, or broader state-carrying executor—that can improve
+              the measured boundary/coverage economics without duplicating Dolphin's Interpreter semantics?
+
+              ## Constraints
+
+              - Do not implement the rejected 17-operation lowering path.
+              - Use the committed aggregate profiles as the workload-shape evidence.
+              - Compare at least three architecture sketches with explicit cost models for dispatch, record size,
+                state materialization, fallback, I-cache, and semantic duplication.
+              - Build only synthetic or test-local prototypes until one sketch has a credible falsifiable advantage.
+              - Persistence, memory specialization, UI, and device work remain blocked.
+
+              ## Pass condition
+
+              Proceed only if a prototype demonstrates at least 20% synthetic headroom under a trace mix derived
+              from the aggregate profiles and predicts substantially fewer materialization boundaries than the
+              rejected design. Otherwise record the CI3 execution thesis as unsupported under current evidence.
+
+              ## Interpretation boundary
+
+              This is architecture research, not Dolphin integration or a product claim.
+              '''
+          else:
+              hypothesis = f'''# EXP-20260817-006 hypothesis — profiler distortion remediation v1
+
+              ## Trigger
+
+              The merged EXP-005 analyzer returned `{decision}` with distortion state
+              `{distortion['state']}`. Coverage cannot authorize lowering while the measurement route is distorted
+              or route-equivalence checks fail.
+
+              ## Question
+
+              Can the aggregate profiler's cost or lifecycle divergence be isolated and reduced without changing
+              its schema, observation semantics, or privacy boundary?
+
+              ## Required ablations
+
+              - null session versus aggregate counters only;
+              - counters plus opcode maps;
+              - counters plus register/reuse histograms;
+              - serialization disabled versus explicit shutdown serialization;
+              - output to memory versus the frozen temporary-file route;
+              - identical route checks with profiling enabled and disabled.
+
+              ## Gate
+
+              Re-run the exact frozen EXP-005 schedule only after a preregistered remediation passes unit tests.
+              The original result remains preserved. A new `results-v2` must use the same fixtures, run order,
+              analyzer, and thresholds unless a separately versioned protocol explains a necessary change.
+
+              ## Interpretation boundary
+
+              This work may validate measurement instrumentation only. It cannot establish coverage, lowering, or
+              performance until the distortion gate passes.
+              '''
+
+          (exp006 / 'hypothesis.md').write_text(textwrap.dedent(hypothesis), encoding='utf-8')
+
+          project_state = f'''# CI3-PIR project state
+
+          Last updated: 2026-08-17 America/Toronto
+
+          ## Current gate
+
+          **Gate 2 — minimum Dolphin integration**
+
+          Gate 0 and Gate 1 are complete. EXP-003 established a scoped 17-form semantic subset.
+          EXP-004 established the aggregate-only instrumentation route. EXP-005 froze legal fixtures,
+          measured profiler distortion, and evaluated compilation-weighted workload structure using the merged
+          preregistered analyzer.
+
+          **EXP-005 decision: `{decision}`**
+
+          Gate 2 is not complete unless and until a controlled runtime path satisfies the charter's correctness and
+          performance thresholds. EXP-005 itself is not a speedup result.
+
+          ## Latest measured evidence
+
+          - Frozen fixtures: {fixture_manifest['fixture_count']} across classes {fixture_manifest['workload_classes']}
+          - Measurement workflow run: `{run_id}`
+          - Distortion gate: `{distortion['state']}`
+          - Overall median paired wall overhead: `{overhead * 100:.4f}%`
+          - Stratified paired-bootstrap 95% interval: `[{interval[0] * 100:.4f}%, {interval[1] * 100:.4f}%]`
+          - Maximum fixture median overhead: `{distortion['maximum_fixture_median_wall_overhead_fraction'] * 100:.4f}%`
+          - Passing workload classes: `{passing_classes}`
+          - Mechanically selected next action: `{action_slug}`
+
+          Evidence state: `PROVEN_RUNTIME (legal fixtures, compilation-weighted, fixture-scoped)`.
+
+          ## Repository milestones
+
+          - Gate 1 implementation merge: `e3ee0bb1b20305c43cde6f1a357935fd915e90c9`
+          - PowerPC semantic differential merge: `8ca2bf2796a43f386c005a73cc0424bf68fcb779`
+          - Aggregate profiler merge: `147e450a2bb1d99a4ce5044eba83465c31598e2f`
+          - JSON serializer merge: `a933b837e2fafa7f35d534325f1f22d937fe29b8`
+          - Runtime collector merge: `731127a0f1c7ea323d977d198b0462a2d210b16c`
+          - EXP-005 result: `docs/ci3/experiments/EXP-20260817-005/results-v1/`
+
+          ## Next workstream
+
+          Follow `EXP-20260817-006/hypothesis.md`, which is generated directly from the merged EXP-005 decision.
+          Do not skip to memory specialization, persistence, broad semantic implementation, iOS UI, or commercial
+          game claims.
+
+          ## Continuing boundaries
+
+          - Compilation observations are not execution frequency.
+          - Duplicate recompilations may contribute more than once.
+          - Representative profiles are legal-fixture and route specific.
+          - No current evidence establishes a Dolphin speedup, commercial-game result, iPhone result, thermal
+            result, strict no-codegen product result, or Gate 2 completion.
+          - CI3 remains experimental in the user's fork under Dolphin's generative-AI policy.
+          '''
+          (repo / 'docs/ci3/PROJECT_STATE.md').write_text(textwrap.dedent(project_state), encoding='utf-8')
+
+          readme = f'''# CI3-PIR
+
+          CI3-PIR is an experimental research program for a portable, high-performance, JITless PowerPC execution
+          backend for Dolphin.
+
+          ## Status
+
+          The project remains in **Gate 2: minimum Dolphin integration**.
+
+          - Gate 1 established synthetic dispatch/state headroom.
+          - EXP-003 established scoped semantics for 17 register-only integer forms.
+          - EXP-004 established aggregate-only `CodeOp` profiling and opt-in output.
+          - EXP-005 used frozen legal open-source fixtures and a preregistered paired analysis.
+
+          Current bounded decision: **`{decision}`**.
+
+          The exact overhead, interval, fixture/class coverage, representative aggregate profiles, hashes, and
+          interpretation boundary are preserved under `docs/ci3/experiments/EXP-20260817-005/results-v1/`.
+          `EXP-20260817-006/hypothesis.md` is the only authorized next research path.
+
+          ## Evidence boundary
+
+          EXP-005 remains compilation-weighted and fixture-scoped. It does not establish execution-weighted hot
+          paths, a Dolphin speedup, a commercial-game or iPhone result, thermal behavior, strict no-codegen full
+          speed, or Gate 2 completion.
+
+          ## Data and policy boundary
+
+          No ROMs, firmware, keys, proprietary binaries, saves, raw guest traces, addresses, disassembly, local
+          paths, or user identifiers are committed. CI3 remains substantially AI-assisted and experimental in the
+          user's fork under Dolphin's current contribution policy.
+          '''
+          (repo / 'docs/ci3/README.md').write_text(textwrap.dedent(readme), encoding='utf-8')
+
+          claims_path = repo / 'docs/ci3/CLAIMS.md'
+          claims = claims_path.read_text(encoding='utf-8')
+          footer = '\nClaims must be demoted when source pins change or controls invalidate the supporting evidence.\n'
+          class_claim_state = 'PROVEN_RUNTIME (fixture-scoped)' if len(passing_classes) >= 2 else 'DISPROVEN (frozen fixtures v1)'
+          lowering_claim_state = 'PROVEN_RUNTIME (decision gate)' if decision == 'PROCEED_TO_MINIMUM_LOWERING_EXPERIMENT' else 'DISPROVEN (EXP-005 v1 gate)'
+          new_rows = textwrap.dedent(f'''| C-025 | Under the frozen EXP-005 route, aggregate profiling produced `{overhead * 100:.4f}%` median paired wall overhead with a 95% interval of `[{interval[0] * 100:.4f}%, {interval[1] * 100:.4f}%]`. | PROVEN_RUNTIME (fixture-scoped) | EXP-005 results-v1, workflow run `{run_id}`, merged analyzer and hashes. | Re-evaluate after profiler, route, fixture, host, or schema changes. |
+          | C-026 | At least two frozen legal workload classes meet the preregistered current-subset coverage/contiguity band. | {class_claim_state} | Passing classes: `{passing_classes}` in EXP-005 results-v1. | New fixtures or execution weighting require a separate result version. |
+          | C-027 | EXP-005 authorizes the minimum runtime lowering experiment for the current subset. | {lowering_claim_state} | Mechanically derived decision: `{decision}`. | Follow only the corresponding EXP-006 protocol. |
+          | C-028 | The EXP-005 compilation-weighted result identifies execution-weighted hot paths. | UNKNOWN | No block execution weighting exists. | Separately validate an execution-count mechanism and schema version. |
+          ''')
+          if '| C-025 |' not in claims:
+              if footer in claims:
+                  claims = claims.replace(footer, '\n' + new_rows + footer)
+              else:
+                  claims = claims.rstrip() + '\n' + new_rows + footer
+              claims_path.write_text(claims, encoding='utf-8')
+
+          decisions_path = repo / 'docs/ci3/DECISIONS.md'
+          decisions = decisions_path.read_text(encoding='utf-8')
+          if '## D-009 — Honor the mechanically derived EXP-005 action' not in decisions:
+              decisions += textwrap.dedent(f'''
+
+              ## D-009 — Honor the mechanically derived EXP-005 action
+
+              Date: 2026-08-17
+
+              Decision: use `{action_slug}` as the only authorized next CI3 workstream because the merged
+              preregistered analyzer returned `{decision}`.
+
+              Rationale: prevents post-result preference from changing the proceed/revise/stop/remediate branch.
+              Exact metrics remain in EXP-005 results-v1.
+
+              Reversible: only through a new preregistered experiment or evidence that invalidates EXP-005.
+              ''')
+              decisions_path.write_text(decisions, encoding='utf-8')
+
+          pathlib.Path('.github/workflows/ci3-exp005-result-state.yml').unlink()
+          PY
+
+      - name: Verify docs-only state transition and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          changed = {line[3:] for line in output.splitlines() if line}
+          workflow = '.github/workflows/ci3-exp005-result-state.yml'
+          if workflow not in changed:
+              raise SystemExit('temporary workflow not removed')
+          unexpected = sorted(path for path in changed if path != workflow and not path.startswith('docs/ci3/'))
+          if unexpected:
+              raise SystemExit(f'unexpected non-doc paths: {unexpected}')
+          required = {
+              'docs/ci3/experiments/EXP-20260817-005/next-action.json',
+              'docs/ci3/experiments/EXP-20260817-005/NEXT_STEP.md',
+              'docs/ci3/experiments/EXP-20260817-006/hypothesis.md',
+          }
+          if not required.issubset(changed):
+              raise SystemExit(f'missing required paths: {sorted(required - changed)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- docs/ci3 .github/workflows/ci3-exp005-result-state.yml
+          git commit \
+            -m 'CI3: record EXP-005 decision and bound EXP-006' \
+            -m 'Promote only fixture-scoped measured claims, update the project state, and generate the sole authorized EXP-006 protocol directly from the merged preregistered EXP-005 decision.'
+          git push origin HEAD:ci3/exp005-result-state-v1
