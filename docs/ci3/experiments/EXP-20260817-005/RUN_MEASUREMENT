@@ -1,0 +1,10 @@
+EXP-20260817-005 measurement trigger v1
+
+Inputs are frozen by:
+- fixture-manifest.json
+- run-order-v1.json
+- analysis-plan-v1.md
+- Tools/ci3/exp005/analyze_exp005.py
+- Tools/ci3/exp005/run_exp005.py
+
+No input, threshold, route, or analysis change is authorized after this trigger.
