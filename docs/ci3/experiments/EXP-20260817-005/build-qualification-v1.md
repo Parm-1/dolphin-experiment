@@ -7,9 +7,9 @@
 - Pre-registered selected targets built: 20
 - Required executable outputs verified: 20
 - Raw selected-build log SHA-256: `7fd56b92ccc75b7ac21a0b6ebec0cba564c3f7496fdf3665191f938c3ac0cc91`
+- Successful workflow run: `32110199577`
 
-The selected set consists of register/CPU and GX workloads chosen from source classes
-before any profiler, coverage, or performance output was available.
+The selected set consists of register/CPU and GX workloads chosen from source classes before any profiler, coverage, or performance output was available.
 
 | Target | Output | Size (bytes) | SHA-256 |
 |---|---|---:|---|
@@ -36,11 +36,7 @@ before any profiler, coverage, or performance output was available.
 
 ## Recorded full-suite blocker
 
-A prior attempt to build every pinned upstream target under the same current toolchain
-failed only after the selected CPU/GX targets had begun building. The current libogc
-`ogc/ipc.h` macro `HW_IPC_PPCMSG` collides with the pinned `iostest/ipc.cpp` enum
-member of the same name. The pinned source was not patched. Full-suite qualification
-therefore remains false; the exact run and diagnostic artifact are recorded in the JSON.
+A prior attempt to build every pinned upstream target under the same current toolchain failed only after the selected CPU/GX targets had begun building. The current libogc `ogc/ipc.h` macro `HW_IPC_PPCMSG` collides with the pinned `iostest/ipc.cpp` enum member of the same name. The pinned source was not patched. Full-suite qualification therefore remains false; workflow run `32108796444` and diagnostic artifact `9314124919` preserve the exact failure.
 
 ## Interpretation boundary
 
@@ -49,8 +45,6 @@ therefore remains false; the exact run and diagnostic artifact are recorded in t
 - No fixture has been launched or shown deterministic.
 - No profiler environment variable was set.
 - No schema-v1 profile was generated or examined.
-- Build success is not route qualification, workload representativeness, coverage, overhead,
-  lowering correctness, or performance evidence.
+- Build success is not route qualification, workload representativeness, coverage, overhead, lowering correctness, or performance evidence.
 
-The next step is non-profiled route qualification of this selected set. Exact runtime
-fixtures must still be frozen before profile output is opened.
+The next step is non-profiled route qualification of this selected set. Exact runtime fixtures must still be frozen before profile output is opened.
