@@ -1,0 +1,471 @@
+name: CI3 EXP-005 Non-profiled Route Reconnaissance
+
+on:
+  push:
+    branches:
+      - ci3/exp005-route-recon-v1
+    paths:
+      - ".github/workflows/ci3-exp005-route-recon.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  route-recon:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out CI3 source and submodules
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-route-recon-v1
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install host build tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config
+
+      - name: Rebuild exact pinned legal fixture source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/ci3-fixture-env
+          import json
+          from pathlib import Path
+          data = json.loads(Path('docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json').read_text())
+          print('HWTESTS_COMMIT=' + data['source_commit'])
+          print('TOOLCHAIN=' + data['toolchain']['repository_digest'])
+          PY
+          source /tmp/ci3-fixture-env
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git hwtests
+          git -C hwtests checkout --detach "$HWTESTS_COMMIT"
+          git -C hwtests submodule update --init --recursive
+          test "$(git -C hwtests rev-parse HEAD)" = "$HWTESTS_COMMIT"
+          docker pull "$TOOLCHAIN"
+          docker run --rm -v "$PWD/hwtests:/work" -w /work "$TOOLCHAIN" \
+            bash -lc 'set -o pipefail; make -j2' 2>&1 | tee route-fixture-build.txt
+
+      - name: Select a diverse deterministic reconnaissance set from source metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import pathlib
+          import re
+
+          repo = pathlib.Path.cwd()
+          source = repo / 'hwtests'
+          build = json.loads(
+              (repo / 'docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json').read_text()
+          )
+          outputs = build['executable_outputs']
+
+          # Prefer DOL over a sibling ELF with the same stem.
+          preferred: dict[str, dict] = {}
+          for item in outputs:
+              path = pathlib.PurePosixPath(item['path'])
+              key = str(path.with_suffix(''))
+              existing = preferred.get(key)
+              if existing is None or path.suffix.lower() == '.dol':
+                  preferred[key] = item
+
+          class_terms = {
+              'integer_control': {
+                  'integer': 8, 'branch': 7, 'rotate': 7, 'shift': 6, 'logical': 6,
+                  'alu': 5, 'gpr': 5, 'xer': 4, 'cr': 3,
+              },
+              'memory_translation': {
+                  'cache': 8, 'mmu': 8, 'memory': 7, 'mem': 5, 'load': 5,
+                  'store': 5, 'tlb': 7, 'bat': 6, 'dsi': 6, 'isi': 6,
+              },
+              'floating_paired': {
+                  'paired': 9, 'float': 8, 'fpu': 8, 'fres': 7, 'frsqrte': 7,
+                  'psq': 7, 'quant': 5,
+              },
+              'system_exception': {
+                  'exception': 9, 'interrupt': 8, 'timer': 7, 'spr': 6, 'msr': 6,
+                  'system': 5, 'decrementer': 7, 'alignment': 5,
+              },
+          }
+
+          source_suffixes = {'.c', '.cc', '.cpp', '.h', '.hpp', '.s', '.S', '.asm'}
+          candidates = []
+          for item in preferred.values():
+              rel = pathlib.PurePosixPath(item['path'])
+              parent = source / pathlib.Path(*rel.parent.parts)
+              text_parts = [str(rel).lower()]
+              if parent.exists():
+                  for file in sorted(parent.rglob('*')):
+                      if file.is_file() and file.suffix in source_suffixes and file.stat().st_size <= 1_000_000:
+                          try:
+                              text_parts.append(file.read_text(encoding='utf-8', errors='ignore').lower())
+                          except OSError:
+                              pass
+              text = '\n'.join(text_parts)
+              scores = {
+                  cls: sum(weight * len(re.findall(r'\b' + re.escape(term) + r'\b', text))
+                           for term, weight in terms.items())
+                  for cls, terms in class_terms.items()
+              }
+              best_class = max(scores, key=lambda key: (scores[key], key))
+              candidates.append({
+                  'path': item['path'],
+                  'sha256': item['sha256'],
+                  'size_bytes': item['size_bytes'],
+                  'scores': scores,
+                  'provisional_class': best_class,
+              })
+
+          selected = []
+          used = set()
+          for cls in class_terms:
+              ranked = sorted(
+                  (item for item in candidates if item['path'] not in used),
+                  key=lambda item: (-item['scores'][cls], item['path']),
+              )
+              positive = [item for item in ranked if item['scores'][cls] > 0]
+              for item in positive[:2]:
+                  chosen = dict(item)
+                  chosen['selected_class'] = cls
+                  selected.append(chosen)
+                  used.add(item['path'])
+
+          # Fill deterministically to six candidates if keyword coverage is sparse.
+          for item in sorted(candidates, key=lambda value: value['path']):
+              if len(selected) >= 6:
+                  break
+              if item['path'] in used:
+                  continue
+              chosen = dict(item)
+              chosen['selected_class'] = item['provisional_class']
+              selected.append(chosen)
+              used.add(item['path'])
+
+          selected = selected[:8]
+          if len(selected) < 4:
+              raise SystemExit(f'only {len(selected)} executable candidates available')
+
+          result = {
+              'schema_version': 1,
+              'selection_stage': 'non_profiled_route_reconnaissance',
+              'selection_rule': (
+                  'Deterministic source/path keyword scoring, at most two candidates per workload class, '
+                  'DOL preferred over sibling ELF, then lexicographic fill to at least six candidates.'
+              ),
+              'profile_output_generated': False,
+              'profile_output_examined': False,
+              'candidates': selected,
+          }
+          pathlib.Path('route-candidates.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          print('\n'.join(item['path'] for item in selected))
+          PY
+
+      - name: Configure a minimal no-GUI Dolphin build
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/ci3-route \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISTRIBUTOR=CI3-PIR \
+            -DUSE_SYSTEM_LIBS=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_QT=OFF \
+            -DENABLE_NOGUI=ON \
+            -DENABLE_HEADLESS=ON \
+            -DENABLE_X11=OFF \
+            -DENABLE_EGL=OFF \
+            -DENABLE_VULKAN=OFF \
+            -DENABLE_LLVM=OFF \
+            -DENABLE_ALSA=OFF \
+            -DENABLE_PULSEAUDIO=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_SDL=OFF \
+            -DENABLE_HWDB=OFF \
+            -DENABLE_EVDEV=OFF \
+            -DUSE_UPNP=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_MGBA=OFF \
+            -DUSE_RETRO_ACHIEVEMENTS=OFF \
+            -DENABLE_AUTOUPDATE=OFF \
+            -DENABLE_ANALYTICS=OFF \
+            -DENCODE_FRAMEDUMPS=OFF \
+            2>&1 | tee route-dolphin-configure.txt
+
+      - name: Build no-GUI Dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ninja -C build/ci3-route -t targets all | grep -q '^dolphin-emu-nogui:'; then
+            target=dolphin-emu-nogui
+          elif ninja -C build/ci3-route -t targets all | grep -q '^dolphin-nogui:'; then
+            target=dolphin-nogui
+          else
+            echo 'No known no-GUI target was generated.' >&2
+            ninja -C build/ci3-route -t targets all | grep -i dolphin | head -100 >&2 || true
+            exit 1
+          fi
+          cmake --build build/ci3-route --target "$target" --parallel 4 \
+            2>&1 | tee route-dolphin-build.txt
+          find build/ci3-route -type f -perm -111 -iname '*dolphin*nogui*' -print -quit \
+            > route-dolphin-binary.txt
+          test -s route-dolphin-binary.txt
+          binary="$(cat route-dolphin-binary.txt)"
+          "$binary" --help > route-dolphin-help.txt 2>&1 || true
+
+      - name: Run non-profiled launch and repeatability reconnaissance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import re
+          import shutil
+          import subprocess
+
+          repo = pathlib.Path.cwd()
+          binary = pathlib.Path((repo / 'route-dolphin-binary.txt').read_text().strip()).resolve()
+          candidates = json.loads((repo / 'route-candidates.json').read_text())['candidates']
+          raw_root = repo / 'route-raw'
+          raw_root.mkdir()
+
+          def normalize(text: str, user_dir: pathlib.Path, fixture: pathlib.Path) -> str:
+              replacements = [
+                  (str(repo), '<REPO>'),
+                  (str(user_dir), '<USERDIR>'),
+                  (str(fixture.resolve()), '<FIXTURE>'),
+              ]
+              for old, new in replacements:
+                  text = text.replace(old, new)
+              text = re.sub(r'\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b', '<TIME>', text)
+              text = re.sub(r'\[[ ]*\d+(?:\.\d+)?s\]', '[<ELAPSED>]', text)
+              text = re.sub(r'\b(?:pid|PID)[=: ]+\d+\b', 'PID=<PID>', text)
+              return text.replace('\r\n', '\n')
+
+          results = []
+          for candidate_index, candidate in enumerate(candidates):
+              fixture = repo / 'hwtests' / candidate['path']
+              if not fixture.is_file():
+                  raise SystemExit(f'missing rebuilt candidate: {candidate["path"]}')
+
+              run_records = []
+              for repetition in range(3):
+                  user_dir = raw_root / f'candidate-{candidate_index:02d}-run-{repetition:02d}-user'
+                  user_dir.mkdir(parents=True)
+                  output_file = raw_root / f'candidate-{candidate_index:02d}-run-{repetition:02d}.txt'
+                  command = [
+                      'timeout', '--signal=TERM', '--kill-after=5s', '10s',
+                      str(binary), '-b', '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
+                      '-C', 'Dolphin.Core.CPUCore=2',
+                      '-C', 'Dolphin.Core.DSPHLE=True',
+                  ]
+                  env = os.environ.copy()
+                  env.pop('DOLPHIN_CI3_BLOCK_PROFILE_PATH', None)
+                  completed = subprocess.run(
+                      command,
+                      cwd=repo,
+                      env=env,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT,
+                      text=True,
+                      errors='replace',
+                  )
+                  text = completed.stdout
+                  for log in sorted(user_dir.rglob('*.log')):
+                      try:
+                          text += '\n<LOGFILE>\n' + log.read_text(encoding='utf-8', errors='replace')
+                      except OSError:
+                          pass
+                  output_file.write_text(text, encoding='utf-8')
+                  normalized = normalize(text, user_dir, fixture)
+                  lower = normalized.lower()
+                  run_records.append({
+                      'repetition': repetition,
+                      'exit_status': completed.returncode,
+                      'timed_out': completed.returncode == 124,
+                      'normalized_sha256': hashlib.sha256(normalized.encode()).hexdigest(),
+                      'normalized_bytes': len(normalized.encode()),
+                      'normalized_lines': normalized.count('\n') + (1 if normalized else 0),
+                      'cached_interpreter_seen': 'cached interpreter' in lower,
+                      'panic_or_crash_seen': any(term in lower for term in (
+                          'panic alert', 'segmentation fault', 'assertion failed', 'fatal error',
+                      )),
+                  })
+                  shutil.rmtree(user_dir, ignore_errors=True)
+
+              hashes = {record['normalized_sha256'] for record in run_records}
+              statuses = {record['exit_status'] for record in run_records}
+              stable = len(hashes) == 1 and len(statuses) == 1
+              launchable = all(
+                  not record['panic_or_crash_seen'] and
+                  record['exit_status'] in (0, 124, 143) and
+                  record['cached_interpreter_seen']
+                  for record in run_records
+              )
+              results.append({
+                  **candidate,
+                  'runs': run_records,
+                  'normalized_output_stable': stable,
+                  'cached_interpreter_launchable': launchable,
+                  'route_recon_verdict': (
+                      'ROUTE_CANDIDATE' if stable and launchable else
+                      'LAUNCHABLE_UNSTABLE_OUTPUT' if launchable else
+                      'REJECTED_RECON'
+                  ),
+              })
+
+          summary = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'stage': 'non_profiled_route_reconnaissance',
+              'dolphin_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'profiler_environment_variable': 'unset',
+              'profile_output_generated': False,
+              'profile_output_examined': False,
+              'repetitions_per_candidate': 3,
+              'timeout_seconds': 10,
+              'video_backend': 'Null',
+              'cpu_core_requested': 'Cached Interpreter',
+              'candidates': results,
+              'interpretation': (
+                  'Reconnaissance only. ROUTE_CANDIDATE is not final fixture qualification and does not '
+                  'establish an architectural result marker.'
+              ),
+          }
+          (repo / 'route-recon-v1.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+
+          qualified = [item for item in results if item['route_recon_verdict'] == 'ROUTE_CANDIDATE']
+          if len(qualified) < 3:
+              raise SystemExit(f'only {len(qualified)} stable Cached Interpreter route candidates')
+          PY
+
+      - name: Preserve aggregate reconnaissance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import pathlib
+          import textwrap
+
+          repo = pathlib.Path.cwd()
+          experiment = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          data = json.loads((repo / 'route-recon-v1.json').read_text())
+          candidates = data['candidates']
+
+          # Retain only aggregate metadata and hashes; no raw output is copied.
+          (experiment / 'route-recon-v1.json').write_text(
+              json.dumps(data, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          lines = [
+              '# EXP-20260817-005 non-profiled route reconnaissance v1',
+              '',
+              '**Boundary: reconnaissance only; final fixture manifest remains unfrozen.**',
+              '',
+              '- Profiler environment variable: unset',
+              '- Profile JSON generated or examined: no',
+              '- Dolphin route: no-GUI, Null video backend, requested Cached Interpreter',
+              '- Repetitions: three fresh-process runs per candidate',
+              '- Stop rule: natural batch exit or fixed 10-second timeout',
+              '',
+              '| Candidate | Class | Verdict | Stable normalized output | Cached Interpreter seen | Exit status set |',
+              '|---|---|---|---:|---:|---|',
+          ]
+          for item in candidates:
+              statuses = sorted({run['exit_status'] for run in item['runs']})
+              seen = all(run['cached_interpreter_seen'] for run in item['runs'])
+              lines.append(
+                  f"| `{item['path']}` | `{item['selected_class']}` | `{item['route_recon_verdict']}` | "
+                  f"{str(item['normalized_output_stable']).lower()} | {str(seen).lower()} | `{statuses}` |"
+              )
+          lines.extend([
+              '',
+              '## Interpretation boundary',
+              '',
+              '- Stable normalized logs and a Cached Interpreter startup marker establish only a repeatable',
+              '  launch/stop route under the tested host.',
+              '- No architectural result marker has been assigned.',
+              '- No fixture has been finally selected.',
+              '- Raw logs, user directories, built binaries, and absolute paths are not committed.',
+              '- No profile output was generated or read.',
+              '- This is not workload coverage, overhead, lowering, or performance evidence.',
+              '',
+              'The next docs-only step must select 4–8 candidates across at least three classes, assign an',
+              'architectural/result marker or explicitly justified fixed-route invariant, freeze their binary',
+              'hashes and balanced run order, and only then permit schema-v1 collection.',
+              '',
+          ])
+          (experiment / 'route-recon-v1.md').write_text('\n'.join(lines), encoding='utf-8')
+
+          pathlib.Path('.github/workflows/ci3-exp005-route-recon.yml').unlink()
+          PY
+
+      - name: Verify evidence-only scope and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf \
+            hwtests route-raw route-candidates.json route-recon-v1.json \
+            route-fixture-build.txt route-dolphin-configure.txt route-dolphin-build.txt \
+            route-dolphin-help.txt route-dolphin-binary.txt build/ci3-route
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              '.github/workflows/ci3-exp005-route-recon.yml',
+              'docs/ci3/experiments/EXP-20260817-005/route-recon-v1.json',
+              'docs/ci3/experiments/EXP-20260817-005/route-recon-v1.md',
+          }
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          actual = {line[3:] for line in output.splitlines() if line}
+          if actual != allowed:
+              raise SystemExit(f'unexpected worktree scope: {sorted(actual ^ allowed)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            .github/workflows/ci3-exp005-route-recon.yml \
+            docs/ci3/experiments/EXP-20260817-005/route-recon-v1.json \
+            docs/ci3/experiments/EXP-20260817-005/route-recon-v1.md
+          git commit \
+            -m 'CI3: record non-profiled legal fixture route reconnaissance' \
+            -m 'Rebuild pinned open-source fixtures, deterministically choose a class-balanced candidate set, and test three fresh no-GUI Cached Interpreter launch/stop routes per candidate with profiling disabled. Preserve only aggregate statuses and normalized-output hashes; final fixture selection and profile access remain blocked.'
+          git push origin HEAD:ci3/exp005-route-recon-v1
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-route-recon-failure
+          path: |
+            route-fixture-build.txt
+            route-dolphin-configure.txt
+            route-dolphin-build.txt
+            route-dolphin-help.txt
+            route-dolphin-binary.txt
+            route-candidates.json
+            route-recon-v1.json
+            route-raw
+          if-no-files-found: warn
+          retention-days: 7
