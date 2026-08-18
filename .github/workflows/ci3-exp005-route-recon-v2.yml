@@ -1,0 +1,475 @@
+name: CI3 EXP-005 Route Reconnaissance v2
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/ci3-exp005-route-recon-v2.yml"
+      - "docs/ci3/experiments/EXP-20260817-005/route-recon-v2-plan.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  route-recon:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out PR head and submodules
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Verify merged prerequisite
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 70abc18a2fb0d56135dcc35a41d988a50b53c7bc HEAD
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('docs/ci3/experiments/EXP-20260817-005')
+          data = json.loads((root / 'build-qualification-v1.json').read_text())
+          assert data['interpretation']['selected_fixture_set_build_qualified'] is True
+          assert data['build']['successful_workflow_run'] == 32110199577
+          assert data['source_commit'] == 'f28077b139eec18967f60db6ce1e15b182dfeac0'
+          print('merged fixture-build prerequisite verified')
+          PY
+
+      - name: Install host build tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libudev-dev
+
+      - name: Rebuild and verify the fixed route candidate set
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' > /tmp/ci3-route-env
+          import json
+          from pathlib import Path
+
+          data = json.loads(Path('docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json').read_text())
+          print('HWTESTS_COMMIT=' + data['source_commit'])
+          print('TOOLCHAIN=' + data['toolchain']['repository_digest'])
+          PY
+          source /tmp/ci3-route-env
+
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git hwtests
+          git -C hwtests checkout --detach "$HWTESTS_COMMIT"
+          git -C hwtests submodule update --init --recursive
+          test "$(git -C hwtests rev-parse HEAD)" = "$HWTESTS_COMMIT"
+
+          docker pull "$TOOLCHAIN" | tee route-toolchain-pull.txt
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            -e HOME=/tmp \
+            -v "$PWD/hwtests:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc '
+              set -euo pipefail
+              cmake -S . -B build -G Ninja \
+                -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake \
+                -DCMAKE_BUILD_TYPE=RelWithDebInfo
+              cmake --build build --parallel 2 --target \
+                cputest_rlw cputest_cr cputest_load cputest_mtspr \
+                cputest_frsp cputest_pairedmove gxtest_bitfield gxtest_tev
+            ' 2>&1 | tee route-fixture-build.txt
+
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path.cwd()
+          qualification = json.loads(
+              (root / 'docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json').read_text()
+          )
+          outputs = {item['target']: item for item in qualification['executable_outputs']}
+          fixed = [
+              ('cputest_rlw', 'integer_control'),
+              ('cputest_cr', 'integer_control'),
+              ('cputest_load', 'memory_system'),
+              ('cputest_mtspr', 'memory_system'),
+              ('cputest_frsp', 'floating_paired'),
+              ('cputest_pairedmove', 'floating_paired'),
+              ('gxtest_bitfield', 'gpu_pipeline'),
+              ('gxtest_tev', 'gpu_pipeline'),
+          ]
+
+          def sha256(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          candidates = []
+          for target, workload_class in fixed:
+              recorded = outputs[target]
+              path = root / 'hwtests' / recorded['path']
+              if not path.is_file():
+                  raise SystemExit(f'missing rebuilt output: {recorded["path"]}')
+              actual_hash = sha256(path)
+              if actual_hash != recorded['sha256']:
+                  raise SystemExit(
+                      f'hash mismatch for {target}: expected {recorded["sha256"]}, got {actual_hash}'
+                  )
+              candidates.append({
+                  'candidate_id': target,
+                  'target': target,
+                  'workload_class': workload_class,
+                  'source_relative_output': recorded['path'],
+                  'size_bytes': recorded['size_bytes'],
+                  'sha256': recorded['sha256'],
+              })
+
+          Path('route-candidates-v2.json').write_text(
+              json.dumps({
+                  'schema_version': 2,
+                  'selection_stage': 'pre_route_fixed_candidate_set',
+                  'selection_uses_profile_or_timing_data': False,
+                  'candidates': candidates,
+              }, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+
+      - name: Configure no-GUI Dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake \
+            -S . \
+            -B build/ci3-route-v2 \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DDISTRIBUTOR=CI3-PIR \
+            -DUSE_SYSTEM_LIBS=OFF \
+            -DENABLE_TESTS=OFF \
+            -DENABLE_QT=OFF \
+            -DENABLE_NOGUI=ON \
+            -DENABLE_HEADLESS=ON \
+            -DENABLE_X11=OFF \
+            -DENABLE_EGL=OFF \
+            -DENABLE_VULKAN=OFF \
+            -DENABLE_LLVM=OFF \
+            -DENABLE_ALSA=OFF \
+            -DENABLE_PULSEAUDIO=OFF \
+            -DENABLE_CUBEB=OFF \
+            -DENABLE_SDL=OFF \
+            -DENABLE_HWDB=OFF \
+            -DENABLE_EVDEV=OFF \
+            -DUSE_UPNP=OFF \
+            -DUSE_DISCORD_PRESENCE=OFF \
+            -DUSE_MGBA=OFF \
+            -DUSE_RETRO_ACHIEVEMENTS=OFF \
+            -DENABLE_AUTOUPDATE=OFF \
+            -DENABLE_ANALYTICS=OFF \
+            -DENCODE_FRAMEDUMPS=OFF \
+            2>&1 | tee route-dolphin-configure.txt
+
+      - name: Build no-GUI Dolphin
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ninja -C build/ci3-route-v2 -t targets all | grep -q '^dolphin-emu-nogui:'; then
+            target=dolphin-emu-nogui
+          elif ninja -C build/ci3-route-v2 -t targets all | grep -q '^dolphin-nogui:'; then
+            target=dolphin-nogui
+          else
+            echo 'No known no-GUI target was generated.' >&2
+            ninja -C build/ci3-route-v2 -t targets all | grep -i dolphin | head -100 >&2 || true
+            exit 1
+          fi
+          cmake --build build/ci3-route-v2 --target "$target" --parallel 4 \
+            2>&1 | tee route-dolphin-build.txt
+          find build/ci3-route-v2 -type f -perm -111 -iname '*dolphin*nogui*' -print -quit \
+            > route-dolphin-binary.txt
+          test -s route-dolphin-binary.txt
+          "$(cat route-dolphin-binary.txt)" --help > route-dolphin-help.txt 2>&1 || true
+
+      - name: Execute fixed non-profiled route matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          repo = Path.cwd()
+          binary = Path((repo / 'route-dolphin-binary.txt').read_text().strip()).resolve()
+          candidates = json.loads((repo / 'route-candidates-v2.json').read_text())['candidates']
+          raw_root = repo / 'route-raw-v2'
+          raw_root.mkdir()
+
+          volatile_patterns = [
+              (r'\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?\b', '<TIME>'),
+              (r'\[[ ]*\d+(?:\.\d+)?s\]', '[<ELAPSED>]'),
+              (r'\b(?:pid|PID|tid|TID)[=: ]+\d+\b', 'ID=<ID>'),
+              (r'0x[0-9a-fA-F]{6,}', '<HEX>'),
+          ]
+          route_keywords = (
+              'dolphin', 'cached interpreter', 'cpu core', 'boot', 'video backend',
+              'null', 'dsp', 'ios', 'shutdown', 'panic', 'fatal', 'assert', 'error',
+              'warning', 'hwtest', 'gekko', 'powerpc',
+          )
+          crash_terms = (
+              'panic alert', 'segmentation fault', 'assertion failed', 'fatal error',
+              'terminate called', 'stack trace:',
+          )
+
+          def normalize(text: str, *, user_dir: Path, fixture: Path) -> str:
+              for old, new in (
+                  (str(repo.resolve()), '<REPO>'),
+                  (str(user_dir.resolve()), '<USERDIR>'),
+                  (str(fixture.resolve()), '<FIXTURE>'),
+              ):
+                  text = text.replace(old, new)
+              text = text.replace('\r\n', '\n')
+              for pattern, replacement in volatile_patterns:
+                  text = re.sub(pattern, replacement, text)
+              text = re.sub(r'[ \t]+', ' ', text)
+              return text
+
+          def signature(normalized: str) -> str:
+              lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+              selected = [line for line in lines if any(word in line.lower() for word in route_keywords)]
+              if not selected:
+                  selected = lines[:64]
+              return '\n'.join(selected[:256]) + ('\n' if selected else '')
+
+          results = []
+          for candidate in candidates:
+              fixture = repo / 'hwtests' / candidate['source_relative_output']
+              runs = []
+              for repetition in range(1, 4):
+                  run_root = raw_root / f"{candidate['candidate_id']}-run-{repetition}"
+                  user_dir = run_root / 'user'
+                  user_dir.mkdir(parents=True)
+                  profile_path = run_root / 'ci3-profile.json'
+                  command = [
+                      'timeout', '--signal=TERM', '--kill-after=5s', '12s',
+                      str(binary), '-b', '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
+                      '-C', 'Dolphin.Core.CPUCore=2',
+                      '-C', 'Dolphin.Core.DSPHLE=True',
+                  ]
+                  environment = os.environ.copy()
+                  environment.pop('DOLPHIN_CI3_BLOCK_PROFILE_PATH', None)
+                  completed = subprocess.run(
+                      command,
+                      cwd=repo,
+                      env=environment,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.STDOUT,
+                      text=True,
+                      errors='replace',
+                  )
+                  text = completed.stdout
+                  for log in sorted(user_dir.rglob('*.log')):
+                      try:
+                          text += '\n<LOGFILE>\n' + log.read_text(encoding='utf-8', errors='replace')
+                      except OSError:
+                          pass
+                  (run_root / 'combined.log').write_text(text, encoding='utf-8')
+                  normalized = normalize(text, user_dir=user_dir, fixture=fixture)
+                  route_signature = signature(normalized)
+                  lower = normalized.lower()
+                  runs.append({
+                      'repetition': repetition,
+                      'exit_status': completed.returncode,
+                      'timed_out': completed.returncode == 124,
+                      'normalized_sha256': hashlib.sha256(normalized.encode()).hexdigest(),
+                      'route_signature_sha256': hashlib.sha256(route_signature.encode()).hexdigest(),
+                      'normalized_bytes': len(normalized.encode()),
+                      'normalized_lines': normalized.count('\n') + (1 if normalized else 0),
+                      'route_signature_lines': route_signature.count('\n'),
+                      'cached_interpreter_marker_seen': 'cached interpreter' in lower,
+                      'panic_or_crash_seen': any(term in lower for term in crash_terms),
+                      'profile_file_created_while_disabled': profile_path.exists(),
+                  })
+                  shutil.rmtree(user_dir, ignore_errors=True)
+
+              status_set = {run['exit_status'] for run in runs}
+              timeout_set = {run['timed_out'] for run in runs}
+              signature_set = {run['route_signature_sha256'] for run in runs}
+              stable = len(status_set) == 1 and len(timeout_set) == 1 and len(signature_set) == 1
+              acceptable = all(
+                  run['exit_status'] in (0, 124, 143)
+                  and run['normalized_bytes'] > 0
+                  and not run['panic_or_crash_seen']
+                  and not run['profile_file_created_while_disabled']
+                  for run in runs
+              )
+              results.append({
+                  **candidate,
+                  'runs': runs,
+                  'route_signature_stable': stable,
+                  'acceptable_launch_stop_route': acceptable,
+                  'route_recon_verdict': 'ROUTE_CANDIDATE' if stable and acceptable else 'REJECTED_RECON',
+              })
+
+          qualified = [item for item in results if item['route_recon_verdict'] == 'ROUTE_CANDIDATE']
+          qualified_classes = sorted({item['workload_class'] for item in qualified})
+          gate_passed = len(qualified) >= 4 and len(qualified_classes) >= 3
+          result = {
+              'schema_version': 2,
+              'experiment_id': 'EXP-20260817-005',
+              'stage': 'non_profiled_route_reconnaissance_v2',
+              'dolphin_commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'prerequisite_merge_commit': '70abc18a2fb0d56135dcc35a41d988a50b53c7bc',
+              'prerequisite_workflow_run': 32110199577,
+              'fixture_source_commit': 'f28077b139eec18967f60db6ce1e15b182dfeac0',
+              'github_actions_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'profiler_environment_variable': 'unset',
+              'profile_output_expected': False,
+              'repetitions_per_candidate': 3,
+              'timeout_seconds': 12,
+              'video_backend': 'Null',
+              'cpu_core_configuration': 'Dolphin.Core.CPUCore=2',
+              'dsp_configuration': 'Dolphin.Core.DSPHLE=True',
+              'candidates': results,
+              'qualified_candidate_count': len(qualified),
+              'qualified_workload_classes': qualified_classes,
+              'gate_passed': gate_passed,
+              'pass_rule': 'at least four ROUTE_CANDIDATE entries spanning at least three workload classes',
+              'interpretation_boundary': [
+                  'Route reconnaissance is not architectural correctness validation of each fixture.',
+                  'The command requests Cached Interpreter; marker presence is recorded but marker absence is not silently treated as proof.',
+                  'No profile, coverage, overhead, lowering, speedup, game, device, or Gate 2 claim follows.',
+              ],
+          }
+          Path('route-recon-v2.json').write_text(
+              json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Render bounded route evidence
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          result_path = Path('route-recon-v2.json')
+          if not result_path.is_file():
+              Path('route-recon-v2.md').write_text(
+                  '# EXP-20260817-005 route reconnaissance v2\n\n'
+                  '**Verdict: WORKFLOW FAILED BEFORE ROUTE RESULT GENERATION**\n',
+                  encoding='utf-8',
+              )
+              raise SystemExit(0)
+
+          data = json.loads(result_path.read_text())
+          lines = [
+              '# EXP-20260817-005 route reconnaissance v2',
+              '',
+              f"**Verdict: {'PASS' if data['gate_passed'] else 'FAIL'}**",
+              '',
+              f"- Tested Dolphin commit: `{data['dolphin_commit']}`",
+              f"- GitHub Actions run: `{data['github_actions_run_id']}`",
+              f"- Qualified candidates: {data['qualified_candidate_count']} / {len(data['candidates'])}",
+              f"- Qualified workload classes: `{data['qualified_workload_classes']}`",
+              '- Profiling environment variable: unset',
+              '- Profile output expected: no',
+              '',
+              '| Candidate | Class | Verdict | Stable signature | Exit statuses | Cached marker in all runs |',
+              '|---|---|---|---:|---|---:|',
+          ]
+          for item in data['candidates']:
+              statuses = sorted({run['exit_status'] for run in item['runs']})
+              marker = all(run['cached_interpreter_marker_seen'] for run in item['runs'])
+              lines.append(
+                  f"| `{item['candidate_id']}` | `{item['workload_class']}` | "
+                  f"`{item['route_recon_verdict']}` | {str(item['route_signature_stable']).lower()} | "
+                  f"`{statuses}` | {str(marker).lower()} |"
+              )
+          lines.extend([
+              '',
+              '## Interpretation boundary',
+              '',
+              '- A pass authorizes only a separate fixture-freeze step.',
+              '- It is not instruction coverage, profiling overhead, architectural correctness, lowering,',
+              '  performance, game, iPhone, thermal, or Gate 2 evidence.',
+              '- Raw logs, user directories, and rebuilt binaries are not part of the durable result.',
+              '',
+          ])
+          Path('route-recon-v2.md').write_text('\n'.join(lines), encoding='utf-8')
+
+          manifest = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'stage': 'route_reconnaissance_v2',
+              'github_actions_run_id': data['github_actions_run_id'],
+              'tested_head_sha': data['dolphin_commit'],
+              'route_result_sha256': hashlib.sha256(result_path.read_bytes()).hexdigest(),
+              'route_summary_sha256': hashlib.sha256(Path('route-recon-v2.md').read_bytes()).hexdigest(),
+              'gate_passed': data['gate_passed'],
+              'raw_logs_committed': False,
+              'fixture_binaries_committed': False,
+          }
+          Path('route-recon-v2-manifest.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Upload route evidence and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-route-recon-v2
+          path: |
+            route-recon-v2.json
+            route-recon-v2.md
+            route-recon-v2-manifest.json
+            route-candidates-v2.json
+            route-fixture-build.txt
+            route-toolchain-pull.txt
+            route-dolphin-configure.txt
+            route-dolphin-build.txt
+            route-dolphin-help.txt
+            route-dolphin-binary.txt
+            route-raw-v2
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce preregistered route gate
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('route-recon-v2.json')
+          if not path.is_file():
+              raise SystemExit('route result was not generated')
+          data = json.loads(path.read_text())
+          if not data['gate_passed']:
+              raise SystemExit(
+                  f"route gate failed: {data['qualified_candidate_count']} candidates, "
+                  f"classes={data['qualified_workload_classes']}"
+              )
+          print('route reconnaissance gate passed')
+          PY
