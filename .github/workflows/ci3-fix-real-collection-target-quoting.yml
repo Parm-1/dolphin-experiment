@@ -1,0 +1,120 @@
+name: CI3 Apply Real Collection Target Quoting Fix
+
+on:
+  push:
+    branches:
+      - ci3/exp005-real-collection-v2
+    paths:
+      - ".github/workflows/ci3-fix-real-collection-target-quoting.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out collection branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-real-collection-v2
+          fetch-depth: 0
+
+      - name: Apply focused workflow correction and record invalidated run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/ci3-exp005-real-collection-v2.yml')
+          text = workflow.read_text(encoding='utf-8')
+          old_import = '''          import json
+          from pathlib import Path
+
+          manifest = json.loads(
+'''
+          new_import = '''          import json
+          import shlex
+          from pathlib import Path
+
+          manifest = json.loads(
+'''
+          if text.count(old_import) != 1:
+              raise SystemExit('unexpected workflow import context')
+          text = text.replace(old_import, new_import, 1)
+
+          replacements = {
+              '          print("HWTESTS_COMMIT=" + manifest["source"]["commit"])\n':
+                  '          print("HWTESTS_COMMIT=" + shlex.quote(manifest["source"]["commit"]))\n',
+              '          print("TOOLCHAIN=" + manifest["source"]["toolchain_repository_digest"])\n':
+                  '          print("TOOLCHAIN=" + shlex.quote(manifest["source"]["toolchain_repository_digest"]))\n',
+              '          print("TARGETS=" + " ".join(f["source"]["build_target"] for f in manifest["fixtures"]))\n':
+                  '          print("TARGETS=" + shlex.quote(" ".join(\n'
+                  '              f["source"]["build_target"] for f in manifest["fixtures"]\n'
+                  '          )))\n',
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'unexpected workflow assignment context: {old!r}')
+              text = text.replace(old, new, 1)
+          workflow.write_text(text, encoding='utf-8')
+
+          plan = Path('docs/ci3/experiments/EXP-20260817-005/real-collection-v2-plan.md')
+          plan_text = plan.read_text(encoding='utf-8')
+          marker = '## Invalidated pre-collection setup run\n'
+          if marker not in plan_text:
+              addition = '''
+## Invalidated pre-collection setup run
+
+Workflow `32188367815` stopped before fixture cloning, fixture compilation, Dolphin compilation, or
+profile collection. The generated shell environment wrote the multi-target value without quoting;
+when sourced, `cputest_cr` was interpreted as a command.
+
+The bounded-failure path succeeded and uploaded artifact `9343396047` with SHA-256
+`007d504cc5d34a49dc1319f678c3cac36c09c03f4bd9d500eb7a6d15e2636d71`. It contains no fixture,
+profile, raw log, user directory, or analysis data.
+
+The correction applies shell quoting with Python `shlex.quote` to all generated assignments. It
+does not change the fixture set, hashes, toolchain, route, schedule, stop controller, pass threshold,
+or data boundary. Run `32188367815` is setup-methodology evidence only and cannot support the
+collection gate decision.
+'''
+              anchor = '\n## Data boundary\n'
+              if plan_text.count(anchor) != 1:
+                  raise SystemExit('unexpected plan insertion context')
+              plan_text = plan_text.replace(anchor, addition + anchor, 1)
+              plan.write_text(plan_text, encoding='utf-8')
+
+          Path('.github/workflows/ci3-fix-real-collection-target-quoting.yml').unlink()
+          PY
+
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/ci3-exp005-real-collection-v2.yml',
+              '.github/workflows/ci3-fix-real-collection-target-quoting.yml',
+              'docs/ci3/experiments/EXP-20260817-005/real-collection-v2-plan.md',
+          }
+          actual = {
+              line[3:] for line in subprocess.check_output(
+                  ['git', 'status', '--porcelain=v1'], text=True
+              ).splitlines() if line
+          }
+          if actual != expected:
+              raise SystemExit(
+                  f'unexpected correction scope: missing={sorted(expected-actual)}, '
+                  f'extra={sorted(actual-expected)}'
+              )
+          PY
+
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            .github/workflows/ci3-exp005-real-collection-v2.yml \
+            .github/workflows/ci3-fix-real-collection-target-quoting.yml \
+            docs/ci3/experiments/EXP-20260817-005/real-collection-v2-plan.md
+          git commit -m 'CI3: quote real-collection fixture target list' \
+            -m 'Fix the sourced environment assignment that treated later target names as commands, preserve the invalidated pre-collection run, and leave all frozen experimental inputs unchanged.'
+          git push origin HEAD:ci3/exp005-real-collection-v2
