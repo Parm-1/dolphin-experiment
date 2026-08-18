@@ -21,7 +21,6 @@ execution backend, changing the opcode subset, claiming performance, or beginnin
 - Tested PR head: `ab4251f14c5cfeb25d78a7a1609c79bc8ed9b2ad`
 - GitHub pull-request merge ref checked out by Actions: `01faa904e1caff3195b2d8185416c9d8f43479b1`
 - Evidence publication head: `57c1972e3019507f70f39c350f80e3dd3f6ea8f3`
-- Final documentation head: `bcf8cbfd9a0d469e898ad960987aefedfa1c61ff`
 - Base prerequisite: PR `#10`, merge `70abc18a2fb0d56135dcc35a41d988a50b53c7bc`
 - Prerequisite workflow: `32110199577`, success
 - Valid route workflow: `32124068535`, success
