@@ -38,15 +38,29 @@ Each candidate receives three fresh-process runs with:
 
 - current PR head;
 - no-GUI Dolphin;
+- the explicit `headless` window platform;
 - Null video backend;
-- `Dolphin.Core.CPUCore=2` (the Cached Interpreter request used by this experiment);
+- `Dolphin.Core.CPUCore=5`, matching `PowerPC::CPUCore::CachedInterpreter` in the pinned source;
 - DSP HLE;
 - profiling environment variable explicitly unset;
-- natural batch exit or a fixed 12-second timeout.
+- natural exit or a fixed 12-second timeout.
 
 The workflow records the exact command contract and whether a Cached Interpreter marker appeared in
 available logs. Marker absence is reported rather than silently converted into proof that another
 core ran.
+
+## Route-contract corrections before the valid run
+
+Two early workflow attempts were rejected as route-contract defects rather than interpreted as
+emulator results:
+
+1. run `32117017451` used the unsupported no-GUI `-b` option and failed before emulation;
+2. run `32119465079` omitted `-p headless`, causing Linux to select `fbdev` and fail to open
+   `/dev/fb0` before emulation.
+
+A subsequent source audit also corrected the inherited CPU-core value from `2` to `5` before any run
+could be accepted as Cached Interpreter evidence. Candidate selection, hashes, repetition count,
+timeout, normalization, and pass thresholds were not changed.
 
 ## Stability rule
 
