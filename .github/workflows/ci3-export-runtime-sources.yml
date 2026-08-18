@@ -1,0 +1,53 @@
+name: CI3 Export Runtime Sources
+
+on:
+  push:
+    branches:
+      - ci3/block-profile-runtime-v1
+    paths:
+      - ".github/workflows/ci3-export-runtime-sources.yml"
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-export-runtime-sources.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Record repository patterns
+        shell: bash
+        run: |
+          mkdir -p ci3-runtime-context
+          grep -R -n -E 'std::getenv|getenv\(' Source/Core Source/UnitTests \
+            > ci3-runtime-context/environment-usage.txt || true
+          grep -R -n -E 'WriteStringToFile|OpenFStream|Rename\(|CreateFullPath' \
+            Source/Core Source/UnitTests > ci3-runtime-context/file-usage.txt || true
+          grep -R -n -E 'TemporaryDirectory|TempFile|GetTemp' Source/UnitTests \
+            > ci3-runtime-context/test-temp-usage.txt || true
+
+      - name: Upload exact runtime-integration context
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-block-profile-runtime-sources
+          path: |
+            .github/workflows/ci3-powerpc-differential.yml
+            Source/Core/Core/CMakeLists.txt
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h
+            Source/Core/Core/PowerPC/CI3
+            Source/Core/Common/FileUtil.cpp
+            Source/Core/Common/FileUtil.h
+            Source/Core/Common/StringUtil.cpp
+            Source/Core/Common/StringUtil.h
+            Source/Core/Common/Logging/Log.h
+            Source/UnitTests/Core/CMakeLists.txt
+            ci3-runtime-context
+          if-no-files-found: error
+          retention-days: 1
