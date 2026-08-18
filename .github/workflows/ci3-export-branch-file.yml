@@ -1,0 +1,74 @@
+name: CI3 Export Branch File
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".ci3/export-request.json"
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+      - name: Resolve and export requested branch file
+        id: request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path, PurePosixPath
+          data = json.loads(Path('.ci3/export-request.json').read_text(encoding='utf-8'))
+          branch = data['branch']
+          path = data['path']
+          name = data.get('artifact_name', 'ci3-exported-branch-file')
+          pure = PurePosixPath(path)
+          if pure.is_absolute() or '..' in pure.parts or not path:
+              raise SystemExit('unsafe export path')
+          if not branch or any(ch.isspace() for ch in branch):
+              raise SystemExit('unsafe branch')
+          print(f'branch={branch}')
+          print(f'path={path}')
+          print(f'artifact_name={name}')
+          PY
+          git fetch --no-tags origin "${{ steps.request.outputs.branch }}"
+          mkdir -p /tmp/ci3-export
+          git show "FETCH_HEAD:${{ steps.request.outputs.path }}" > /tmp/ci3-export/exported-file
+          printf '%s\n' '${{ steps.request.outputs.path }}' > /tmp/ci3-export/original-path.txt
+          sha256sum /tmp/ci3-export/exported-file > /tmp/ci3-export/sha256.txt
+      - name: Upload requested file
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.request.outputs.artifact_name }}
+          path: /tmp/ci3-export
+          if-no-files-found: error
+          retention-days: 1
+      - name: Publish run locator
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          request = json.loads(Path('.ci3/export-request.json').read_text(encoding='utf-8'))
+          result = {
+              'run_id': int('${{ github.run_id }}'),
+              'head_sha': '${{ github.sha }}',
+              'branch': request['branch'],
+              'path': request['path'],
+              'artifact_name': request.get('artifact_name', 'ci3-exported-branch-file'),
+          }
+          Path('.ci3/export-result.json').write_text(json.dumps(result, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add .ci3/export-result.json
+          git commit -m 'CI3: record branch-file export run'
+          git push origin HEAD:master
