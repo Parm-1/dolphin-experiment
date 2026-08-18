@@ -4,14 +4,22 @@ on:
   pull_request:
     paths:
       - ".github/workflows/ci3-powerpc-differential.yml"
+      - "Source/Core/Core/CMakeLists.txt"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfile.cpp"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfile.h"
       - "Source/UnitTests/Core/CMakeLists.txt"
+      - "Source/UnitTests/Core/PowerPC/CI3BlockProfileTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
   push:
     branches:
       - master
     paths:
       - ".github/workflows/ci3-powerpc-differential.yml"
+      - "Source/Core/Core/CMakeLists.txt"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfile.cpp"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfile.h"
       - "Source/UnitTests/Core/CMakeLists.txt"
+      - "Source/UnitTests/Core/PowerPC/CI3BlockProfileTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
   workflow_dispatch:
 
@@ -138,11 +146,11 @@ jobs:
           cmake --build build/ci3-powerpc --target tests --parallel 4 \
             2>&1 | tee "results/${{ matrix.slug }}/build.txt"
 
-      - name: Run CI3 PowerPC differential tests
+      - name: Run CI3 PowerPC validation tests
         shell: bash
         run: |
           ./build/ci3-powerpc/Binaries/Tests/tests \
-            --gtest_filter='CI3PowerPCIntegerDifferential.*' \
+            --gtest_filter='CI3PowerPCIntegerDifferential.*:CI3BlockProfile.*' \
             --gtest_color=no \
             2>&1 | tee "results/${{ matrix.slug }}/test.txt"
 
