@@ -3,6 +3,7 @@
 
 #include "Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
 
+#include <cstdlib>
 #include <span>
 #include <sstream>
 #include <utility>
@@ -18,6 +19,7 @@
 #include "Core/HLE/HLE.h"
 #include "Core/HW/CPU.h"
 #include "Core/Host.h"
+#include "Core/PowerPC/CI3/BlockProfileRuntime.h"
 #include "Core/PowerPC/Gekko.h"
 #include "Core/PowerPC/Interpreter/Interpreter.h"
 #include "Core/PowerPC/Jit64Common/Jit64Constants.h"
@@ -42,6 +44,9 @@ void CachedInterpreter::Init()
 
   m_block_cache.Init();
 
+  m_ci3_block_profile = PowerPC::CI3::CreateBlockProfileRuntime(
+      std::getenv("DOLPHIN_CI3_BLOCK_PROFILE_PATH"));
+
   code_block.m_stats = &js.st;
   code_block.m_gpa = &js.gpa;
   code_block.m_fpa = &js.fpa;
@@ -49,6 +54,10 @@ void CachedInterpreter::Init()
 
 void CachedInterpreter::Shutdown()
 {
+  if (m_ci3_block_profile && !m_ci3_block_profile->Flush())
+    ERROR_LOG_FMT(DYNA_REC, "Failed to write CI3 aggregate block profile");
+  m_ci3_block_profile.reset();
+
   m_block_cache.Shutdown();
 }
 
@@ -317,6 +326,14 @@ void CachedInterpreter::Jit(u32 em_address, bool clear_cache_and_retry_on_failur
         m_free_ranges.erase(b->near_begin, b->near_end);
 
       m_block_cache.FinalizeBlock(*b, jo.enableBlocklink, code_block, m_code_buffer);
+
+      if (m_ci3_block_profile)
+      {
+        m_ci3_block_profile->ObserveBlock(
+            code_block.m_broken,
+            std::span<const PPCAnalyst::CodeOp>{m_code_buffer.data(),
+                                                code_block.m_num_instructions});
+      }
 
 #ifdef JIT_LOG_GENERATED_CODE
       LogGeneratedCode();

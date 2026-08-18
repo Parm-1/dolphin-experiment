@@ -512,6 +512,12 @@ add_library(core
   PatchEngine.h
   PowerPC/BreakPoints.cpp
   PowerPC/BreakPoints.h
+  PowerPC/CI3/BlockProfile.cpp
+  PowerPC/CI3/BlockProfile.h
+  PowerPC/CI3/BlockProfileJson.cpp
+  PowerPC/CI3/BlockProfileJson.h
+  PowerPC/CI3/BlockProfileRuntime.cpp
+  PowerPC/CI3/BlockProfileRuntime.h
   PowerPC/CachedInterpreter/CachedInterpreter_Disassembler.cpp
   PowerPC/CachedInterpreter/CachedInterpreter.cpp
   PowerPC/CachedInterpreter/CachedInterpreter.h
