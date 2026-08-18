@@ -1,7 +1,7 @@
 {
-  "artifact_name": "ci3-pr11-workflow-source",
-  "branch": "ci3/exp005-route-recon-v1",
-  "head_sha": "f71b4f270486b8589ea1e22a04c978185de85c4a",
-  "path": ".github/workflows/ci3-exp005-route-recon.yml",
-  "run_id": 32108086464
+  "artifact_name": "ci3-pr10-workflow-source-current",
+  "branch": "ci3/exp005-fixture-build-v1",
+  "head_sha": "b9df9c531439a1c610623b446030f7faa4a6b057",
+  "path": ".github/workflows/ci3-exp005-fixture-build.yml",
+  "run_id": 32109536562
 }
