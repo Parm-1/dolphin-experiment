@@ -1,0 +1,108 @@
+name: CI3 Apply Runtime Integration Now
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci3-apply-runtime-now.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'ci3/block-profile-runtime-v1'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ci3/block-profile-runtime-v1
+          fetch-depth: 0
+
+      - name: Extract reviewed patch carrier
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import io
+          import pathlib
+          import tarfile
+
+          source = pathlib.Path('.github/workflows/ci3-apply-runtime-patch.yml')
+          text = source.read_text(encoding='utf-8')
+          start_marker = "          cat > /tmp/ci3-runtime-patch.b64 <<'PAYLOAD'\n"
+          end_marker = "\n          PAYLOAD\n"
+          start = text.index(start_marker) + len(start_marker)
+          end = text.index(end_marker, start)
+          payload_lines = text[start:end].splitlines()
+          payload = ''.join(line[10:] if line.startswith('          ') else line
+                            for line in payload_lines)
+          archive = base64.b64decode(payload, validate=True)
+          expected_hash = '79fb4f7055f5a26a1b782f31101a9668b4024f34ce17c588c976d630b2815db8'
+          actual_hash = hashlib.sha256(archive).hexdigest()
+          if actual_hash != expected_hash:
+              raise SystemExit(f'payload hash mismatch: {actual_hash}')
+
+          expected = {
+              '.github/workflows/ci3-powerpc-differential.yml',
+              'Source/Core/Core/CMakeLists.txt',
+              'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp',
+              'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h',
+              'Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp',
+              'Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h',
+              'Source/UnitTests/Core/CMakeLists.txt',
+              'Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp',
+              'docs/ci3/experiments/EXP-20260817-004/runtime-v1.md',
+          }
+          with tarfile.open(fileobj=io.BytesIO(archive), mode='r:gz') as bundle:
+              members = bundle.getmembers()
+              names = {member.name for member in members if member.isfile()}
+              if names != expected:
+                  raise SystemExit(f'unexpected payload members: {sorted(names ^ expected)}')
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts or not member.isfile():
+                      raise SystemExit(f'unsafe payload member: {member.name}')
+              bundle.extractall('.', filter='data')
+
+          for path in [
+              '.github/workflows/ci3-apply-runtime-patch.yml',
+              '.github/workflows/ci3-export-runtime-sources.yml',
+              '.github/workflows/ci3-export-runtime-payload.yml',
+              '.github/workflows/ci3-apply-runtime-now.yml',
+          ]:
+              pathlib.Path(path).unlink(missing_ok=True)
+          PY
+
+      - name: Validate scope and publish
+        shell: bash
+        run: |
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          expected = {
+              '.github/workflows/ci3-apply-runtime-patch.yml',
+              '.github/workflows/ci3-export-runtime-sources.yml',
+              '.github/workflows/ci3-export-runtime-payload.yml',
+              '.github/workflows/ci3-apply-runtime-now.yml',
+              '.github/workflows/ci3-powerpc-differential.yml',
+              'Source/Core/Core/CMakeLists.txt',
+              'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp',
+              'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h',
+              'Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp',
+              'Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h',
+              'Source/UnitTests/Core/CMakeLists.txt',
+              'Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp',
+              'docs/ci3/experiments/EXP-20260817-004/runtime-v1.md',
+          }
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          actual = {line[3:] for line in output.splitlines() if line}
+          if actual != expected:
+              raise SystemExit(f'unexpected worktree scope: {sorted(actual ^ expected)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A
+          git commit -m 'CI3: integrate opt-in aggregate block profiler' -m 'Add environment-gated Cached Interpreter collection, explicit orderly-shutdown JSON flush, output-lifecycle tests, and three-target CI coverage. The disabled path allocates no profiler and creates no file. No execution backend or performance claim is introduced.'
+          git push origin HEAD:ci3/block-profile-runtime-v1
