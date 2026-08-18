@@ -1,0 +1,374 @@
+name: CI3 EXP-005 Freeze Fixture Manifest
+
+on:
+  push:
+    branches:
+      - ci3/exp005-freeze-fixtures-v1
+    paths:
+      - ".github/workflows/ci3-exp005-freeze-fixtures.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  freeze:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out manifest branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-freeze-fixtures-v1
+          fetch-depth: 0
+
+      - name: Clone exact pinned legal source
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          print(json.loads(Path('docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json').read_text())['source_commit'])
+          PY
+          )"
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git /tmp/dolphin-hwtests
+          git -C /tmp/dolphin-hwtests checkout --detach "$commit"
+          git -C /tmp/dolphin-hwtests submodule update --init --recursive
+          test "$(git -C /tmp/dolphin-hwtests rev-parse HEAD)" = "$commit"
+
+      - name: Freeze selected fixtures and balanced run order
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import pathlib
+          import textwrap
+
+          repo = pathlib.Path.cwd()
+          source = pathlib.Path('/tmp/dolphin-hwtests')
+          experiment = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          build = json.loads((experiment / 'build-qualification-v1.json').read_text())
+          recon = json.loads((experiment / 'route-recon-v1.json').read_text())
+
+          qualified = [
+              item for item in recon['candidates']
+              if item['route_recon_verdict'] == 'ROUTE_CANDIDATE'
+          ]
+          by_class: dict[str, list[dict]] = {}
+          for item in qualified:
+              by_class.setdefault(item['selected_class'], []).append(item)
+          for items in by_class.values():
+              items.sort(key=lambda item: item['path'])
+
+          if len(by_class) < 3:
+              raise SystemExit(f'only {len(by_class)} qualified workload classes')
+
+          selected: list[dict] = []
+          used: set[str] = set()
+          # First pass: one per class for maximum diversity.
+          for cls in sorted(by_class):
+              item = by_class[cls][0]
+              selected.append(item)
+              used.add(item['path'])
+          # Second pass: one additional candidate per class, then lexicographic fill to six.
+          for cls in sorted(by_class):
+              for item in by_class[cls][1:2]:
+                  if len(selected) >= 6:
+                      break
+                  selected.append(item)
+                  used.add(item['path'])
+          for item in sorted(qualified, key=lambda value: value['path']):
+              if len(selected) >= 6:
+                  break
+              if item['path'] not in used:
+                  selected.append(item)
+                  used.add(item['path'])
+
+          selected = selected[:8]
+          if len(selected) < 4:
+              raise SystemExit(f'only {len(selected)} qualified fixtures')
+          if len({item['selected_class'] for item in selected}) < 3:
+              raise SystemExit('selected fixtures do not span three workload classes')
+
+          source_suffixes = {'.c', '.cc', '.cpp', '.h', '.hh', '.hpp', '.s', '.S', '.asm', '.ld'}
+
+          def sha256(path: pathlib.Path) -> str:
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          fixture_entries = []
+          for index, item in enumerate(selected, start=1):
+              output_rel = pathlib.PurePosixPath(item['path'])
+              search_parent = source / pathlib.Path(*output_rel.parent.parts)
+              tracked_sources: list[pathlib.Path] = []
+              cursor = search_parent
+              while cursor == source or source in cursor.parents:
+                  if cursor.exists():
+                      tracked_sources = sorted(
+                          path for path in cursor.rglob('*')
+                          if path.is_file()
+                          and path.suffix in source_suffixes
+                          and '.git' not in path.parts
+                      )
+                  if tracked_sources or cursor == source:
+                      break
+                  cursor = cursor.parent
+
+              source_hashes = [
+                  {
+                      'path': str(path.relative_to(source)),
+                      'sha256': sha256(path),
+                      'size_bytes': path.stat().st_size,
+                  }
+                  for path in tracked_sources
+              ]
+              if not source_hashes:
+                  raise SystemExit(f'no source-like files found for {item["path"]}')
+
+              run0 = item['runs'][0]
+              hashes = {run['normalized_sha256'] for run in item['runs']}
+              statuses = {run['exit_status'] for run in item['runs']}
+              timeout_values = {run['timed_out'] for run in item['runs']}
+              if len(hashes) != 1 or len(statuses) != 1 or len(timeout_values) != 1:
+                  raise SystemExit(f'route invariant is not singular for {item["path"]}')
+
+              fixture_entries.append({
+                  'fixture_id': f'F{index:02d}',
+                  'workload_class': item['selected_class'],
+                  'source_repository': 'dolphin-emu/hwtests',
+                  'source_commit': build['source_commit'],
+                  'source_relative_output': item['path'],
+                  'source_files': source_hashes,
+                  'build_toolchain_repository_digest': build['toolchain']['repository_digest'],
+                  'build_command': build['build']['command'],
+                  'produced_binary': {
+                      'sha256': item['sha256'],
+                      'size_bytes': item['size_bytes'],
+                      'binary_committed': False,
+                  },
+                  'route': {
+                      'frontend': 'dolphin-emu-nogui',
+                      'video_backend': 'Null',
+                      'cpu_core': 'Cached Interpreter',
+                      'profiler_environment': 'unset during qualification',
+                      'fresh_user_directory_each_run': True,
+                      'command_template': (
+                          "timeout --signal=TERM --kill-after=5s 10s <dolphin-nogui> -b -e <fixture> "
+                          "-u <fresh-user-dir> -v Null -C Dolphin.Core.CPUCore=2 "
+                          "-C Dolphin.Core.DSPHLE=True"
+                      ),
+                      'stop_rule': 'natural batch exit or fixed 10-second timeout',
+                  },
+                  'qualification': {
+                      'repetitions': len(item['runs']),
+                      'cached_interpreter_seen_every_run': all(
+                          run['cached_interpreter_seen'] for run in item['runs']
+                      ),
+                      'panic_or_crash_seen': any(
+                          run['panic_or_crash_seen'] for run in item['runs']
+                      ),
+                      'expected_exit_status': next(iter(statuses)),
+                      'expected_timed_out': next(iter(timeout_values)),
+                      'expected_normalized_output_sha256': next(iter(hashes)),
+                      'expected_normalized_bytes': run0['normalized_bytes'],
+                      'expected_normalized_lines': run0['normalized_lines'],
+                      'route_invariant_kind': (
+                          'fixed normalized launch/stop log hash plus exit status and Cached Interpreter marker'
+                      ),
+                      'architectural_result_claimed': False,
+                      'qualification_verdict': 'QUALIFIED_FIXED_ROUTE',
+                  },
+                  'selection_reason': (
+                      'Stable three-run non-profiled route; selected by frozen class-diversity and '
+                      'at-most-two-per-class rule before profile access.'
+                  ),
+              })
+
+          rejected = []
+          for item in sorted(recon['candidates'], key=lambda value: value['path']):
+              if item['path'] in used:
+                  continue
+              rejected.append({
+                  'path': item['path'],
+                  'workload_class': item['selected_class'],
+                  'route_recon_verdict': item['route_recon_verdict'],
+                  'reason': (
+                      'not selected after frozen class-balance/capacity rule'
+                      if item['route_recon_verdict'] == 'ROUTE_CANDIDATE'
+                      else 'failed non-profiled route reconnaissance'
+                  ),
+              })
+
+          # Four warm-ups per fixture: two per condition in a fixed balanced order.
+          warmups = []
+          run_index = 0
+          for fixture in fixture_entries:
+              for condition in ('baseline', 'treatment', 'treatment', 'baseline'):
+                  warmups.append({
+                      'run_index': run_index,
+                      'fixture_id': fixture['fixture_id'],
+                      'condition': condition,
+                  })
+                  run_index += 1
+
+          pair_orders = [
+              ('baseline', 'treatment'),
+              ('treatment', 'baseline'),
+              ('treatment', 'baseline'),
+              ('baseline', 'treatment'),
+              ('treatment', 'baseline'),
+              ('baseline', 'treatment'),
+              ('baseline', 'treatment'),
+              ('treatment', 'baseline'),
+          ]
+          measured = []
+          run_index = 0
+          fixture_count = len(fixture_entries)
+          for round_index, conditions in enumerate(pair_orders):
+              rotated = fixture_entries[round_index % fixture_count:] + fixture_entries[:round_index % fixture_count]
+              for fixture in rotated:
+                  pair_id = f"R{round_index + 1:02d}-{fixture['fixture_id']}"
+                  for pair_position, condition in enumerate(conditions, start=1):
+                      measured.append({
+                          'run_index': run_index,
+                          'round': round_index + 1,
+                          'pair_id': pair_id,
+                          'pair_position': pair_position,
+                          'fixture_id': fixture['fixture_id'],
+                          'condition': condition,
+                      })
+                      run_index += 1
+
+          schedule = {
+              'schema_version': 1,
+              'conditions': {
+                  'baseline': 'DOLPHIN_CI3_BLOCK_PROFILE_PATH unset',
+                  'treatment': 'DOLPHIN_CI3_BLOCK_PROFILE_PATH set to a fresh temporary file',
+              },
+              'warmups': warmups,
+              'measured': measured,
+              'pair_round_condition_order': [list(pair) for pair in pair_orders],
+              'fixture_order_rule': 'lexicographic fixture IDs rotated left by round index',
+              'analysis_pairing': 'within fixture and pair_id',
+              'profile_access_rule': (
+                  'Treatment JSON may be opened only after this fixture manifest and schedule are merged.'
+              ),
+          }
+          schedule_bytes = (json.dumps(schedule, indent=2, sort_keys=True) + '\n').encode()
+          schedule['schedule_sha256_before_self_field'] = hashlib.sha256(schedule_bytes).hexdigest()
+
+          manifest = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'manifest_state': 'FROZEN_BEFORE_PROFILE_ACCESS',
+              'date': '2026-08-17',
+              'fixture_count': len(fixture_entries),
+              'workload_classes': sorted({item['workload_class'] for item in fixture_entries}),
+              'source_repository': 'dolphin-emu/hwtests',
+              'source_commit': build['source_commit'],
+              'source_license': build['source_license'],
+              'fixtures': fixture_entries,
+              'rejected_or_not_selected': rejected,
+              'measurement_schedule_file': 'run-order-v1.json',
+              'profile_output_generated_during_freeze': False,
+              'profile_output_examined_during_freeze': False,
+              'interpretation': (
+                  'A fixed-route invariant establishes route repeatability, not the correctness of each '
+                  'hardware test. Coverage and overhead remain unmeasured.'
+              ),
+          }
+
+          (experiment / 'fixture-manifest.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          (experiment / 'run-order-v1.json').write_text(
+              json.dumps(schedule, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+
+          lines = [
+              '# EXP-20260817-005 frozen fixture manifest v1',
+              '',
+              '**State: FROZEN BEFORE PROFILE ACCESS**',
+              '',
+              f'- Selected fixtures: {len(fixture_entries)}',
+              f"- Workload classes: {', '.join(sorted({item['workload_class'] for item in fixture_entries}))}",
+              f"- Pinned source: `dolphin-emu/hwtests@{build['source_commit']}`",
+              f"- Toolchain digest: `{build['toolchain']['repository_digest']}`",
+              '- Profile JSON generated or examined during selection/freeze: no',
+              '',
+              '| Fixture | Class | Source-relative output | Binary SHA-256 | Fixed route invariant |',
+              '|---|---|---|---|---|',
+          ]
+          for fixture in fixture_entries:
+              qualification = fixture['qualification']
+              invariant = (
+                  f"exit={qualification['expected_exit_status']}; "
+                  f"timeout={str(qualification['expected_timed_out']).lower()}; "
+                  f"log={qualification['expected_normalized_output_sha256']}"
+              )
+              lines.append(
+                  f"| `{fixture['fixture_id']}` | `{fixture['workload_class']}` | "
+                  f"`{fixture['source_relative_output']}` | "
+                  f"`{fixture['produced_binary']['sha256']}` | `{invariant}` |"
+              )
+          lines.extend([
+              '',
+              '## Measurement order',
+              '',
+              '- Four warm-up runs per fixture: baseline, treatment, treatment, baseline.',
+              '- Eight measured paired rounds per fixture.',
+              '- Condition order is balanced across pairs and fixed in `run-order-v1.json`.',
+              '- Fixture order rotates deterministically by round.',
+              '- Pairing is within fixture and `pair_id`.',
+              '',
+              '## Boundary',
+              '',
+              '- The fixed log/exit invariant verifies the same launch and stop route; it is not an',
+              '  architectural correctness claim for the underlying hardware test.',
+              '- Built binaries remain local and are identified only by hashes.',
+              '- No profile output was generated or read before this freeze.',
+              '- Any fixture, route, threshold, or schedule change after merge requires a new manifest',
+              '  version and invalidates unblinded EXP-005 data.',
+              '',
+          ])
+          (experiment / 'fixture-manifest.md').write_text('\n'.join(lines), encoding='utf-8')
+
+          pathlib.Path('.github/workflows/ci3-exp005-freeze-fixtures.yml').unlink()
+          PY
+
+      - name: Verify docs-only freeze and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+          allowed = {
+              '.github/workflows/ci3-exp005-freeze-fixtures.yml',
+              'docs/ci3/experiments/EXP-20260817-005/fixture-manifest.json',
+              'docs/ci3/experiments/EXP-20260817-005/fixture-manifest.md',
+              'docs/ci3/experiments/EXP-20260817-005/run-order-v1.json',
+          }
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          actual = {line[3:] for line in output.splitlines() if line}
+          if actual != allowed:
+              raise SystemExit(f'unexpected worktree scope: {sorted(actual ^ allowed)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            .github/workflows/ci3-exp005-freeze-fixtures.yml \
+            docs/ci3/experiments/EXP-20260817-005/fixture-manifest.json \
+            docs/ci3/experiments/EXP-20260817-005/fixture-manifest.md \
+            docs/ci3/experiments/EXP-20260817-005/run-order-v1.json
+          git commit \
+            -m 'CI3: freeze EXP-005 fixtures and paired run order' \
+            -m 'Select a class-diverse set only from stable non-profiled route candidates, freeze source and binary hashes plus fixed route invariants, and commit the balanced warm-up and paired measurement schedule before any schema-v1 profile output is generated or opened.'
+          git push origin HEAD:ci3/exp005-freeze-fixtures-v1
