@@ -1,0 +1,94 @@
+name: CI3 Apply Text Replacements
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".ci3/text-replacements.json"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out control request
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Validate and preserve request
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path, PurePosixPath
+          request = json.loads(Path('.ci3/text-replacements.json').read_text(encoding='utf-8'))
+          branch = request['branch']
+          path = PurePosixPath(request['path'])
+          if not branch or any(ch.isspace() for ch in branch):
+              raise SystemExit('unsafe branch')
+          if path.is_absolute() or '..' in path.parts or not path.parts:
+              raise SystemExit('unsafe path')
+          replacements = request.get('replacements', [])
+          if not replacements:
+              raise SystemExit('no replacements supplied')
+          for item in replacements:
+              if not isinstance(item.get('old'), str) or not isinstance(item.get('new'), str):
+                  raise SystemExit('replacement values must be strings')
+              if int(item.get('count', 1)) < 1:
+                  raise SystemExit('replacement count must be positive')
+          Path('/tmp/ci3-text-replacements.json').write_text(
+              json.dumps(request, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Check out target branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ fromJSON(hashFiles('/tmp/ci3-text-replacements.json') || '{}').branch }}
+          fetch-depth: 0
+
+      - name: Apply exact replacements and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          request = json.loads(Path('/tmp/ci3-text-replacements.json').read_text(encoding='utf-8'))
+          path = Path(request['path'])
+          text = path.read_text(encoding='utf-8')
+          expected_sha = request.get('expected_blob_sha')
+          if expected_sha:
+              import hashlib
+              actual = hashlib.sha1(f'blob {len(text.encode())}\0'.encode() + text.encode()).hexdigest()
+              if actual != expected_sha:
+                  raise SystemExit(f'blob changed: expected {expected_sha}, got {actual}')
+          for index, item in enumerate(request['replacements']):
+              old = item['old']
+              new = item['new']
+              count = int(item.get('count', 1))
+              actual_count = text.count(old)
+              if actual_count != count:
+                  raise SystemExit(
+                      f'replacement {index} count mismatch: expected {count}, found {actual_count}'
+                  )
+              text = text.replace(old, new, count)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+          target_path="$(python3 -c "import json; print(json.load(open('/tmp/ci3-text-replacements.json'))['path'])")"
+          changed="$(git status --porcelain=v1 | sed 's/^...//')"
+          test "$changed" = "$target_path"
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -- "$target_path"
+          message="$(python3 -c "import json; print(json.load(open('/tmp/ci3-text-replacements.json')).get('commit_message', 'CI3: apply reviewed text replacements'))")"
+          git commit -m "$message"
+          branch="$(python3 -c "import json; print(json.load(open('/tmp/ci3-text-replacements.json'))['branch'])")"
+          git push origin "HEAD:$branch"
