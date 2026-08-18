@@ -1,0 +1,218 @@
+{
+  "build": {
+    "build_command": "cmake --build build --parallel 2 --target <selected_targets>",
+    "build_log_sha256": "7fd56b92ccc75b7ac21a0b6ebec0cba564c3f7496fdf3665191f938c3ac0cc91",
+    "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+    "executable_output_count": 20,
+    "exit_status": 0,
+    "selected_target_count": 20,
+    "selected_targets": [
+      "cputest_cr",
+      "cputest_fctiw",
+      "cputest_fctiwz",
+      "cputest_frsp",
+      "cputest_fprf",
+      "cputest_load",
+      "cputest_mtspr",
+      "cputest_nan",
+      "cputest_ni",
+      "cputest_pairedmove",
+      "cputest_reciprocal",
+      "cputest_rlw",
+      "cputest_srawix",
+      "gxtest_bitfield",
+      "gxtest_clipping",
+      "gxtest_copyfilter",
+      "gxtest_intensity",
+      "gxtest_lighting",
+      "gxtest_rasterization",
+      "gxtest_tev"
+    ]
+  },
+  "data_boundary": "Only source/toolchain pins, selected target names, build-log hash, output paths, sizes, hashes, and the known exclusion are committed. Built binaries and raw logs remain uncommitted.",
+  "date": "2026-08-18",
+  "executable_outputs": [
+    {
+      "path": "build/cputest/cputest_cr.elf",
+      "sha256": "a6ad00f9399816530cb95e6fb659030ba51a5748c3abc5f3163cb50abd14d95b",
+      "size_bytes": 3776656,
+      "suffix": ".elf",
+      "target": "cputest_cr"
+    },
+    {
+      "path": "build/cputest/cputest_fctiw.elf",
+      "sha256": "891d57de97240c078205836a76675f0dc02d312992a40b456191da4723766365",
+      "size_bytes": 3819612,
+      "suffix": ".elf",
+      "target": "cputest_fctiw"
+    },
+    {
+      "path": "build/cputest/cputest_fctiwz.elf",
+      "sha256": "64c5bfcddc19c9ffc6572b65787829e7685a746a498eafde45997c7add44f1e1",
+      "size_bytes": 3772656,
+      "suffix": ".elf",
+      "target": "cputest_fctiwz"
+    },
+    {
+      "path": "build/cputest/cputest_frsp.elf",
+      "sha256": "d6a6f6c9852b39c6cb33cb44fc0115be776ead9ce9abcf3d835f5872985c936a",
+      "size_bytes": 3774596,
+      "suffix": ".elf",
+      "target": "cputest_frsp"
+    },
+    {
+      "path": "build/cputest/cputest_fprf.elf",
+      "sha256": "cf27d1fa6f4f4dc20405a8a64d3e3b41b17d00f59dd16aa3c39f8d02add61f99",
+      "size_bytes": 3808892,
+      "suffix": ".elf",
+      "target": "cputest_fprf"
+    },
+    {
+      "path": "build/cputest/cputest_load.elf",
+      "sha256": "0647e3e92f3504806ee73a25b4b35b35b64424b41617504577719e4ec9f65af2",
+      "size_bytes": 3233404,
+      "suffix": ".elf",
+      "target": "cputest_load"
+    },
+    {
+      "path": "build/cputest/cputest_mtspr.elf",
+      "sha256": "32d40f003954a063fc940bc3f15b989ac8a349801caff84fd1dfc01ba5271f19",
+      "size_bytes": 3771824,
+      "suffix": ".elf",
+      "target": "cputest_mtspr"
+    },
+    {
+      "path": "build/cputest/cputest_nan.elf",
+      "sha256": "44d9b67922e49292b9d92158433a7f816a5c0d3063f240b6b28faf419605e0bc",
+      "size_bytes": 3919468,
+      "suffix": ".elf",
+      "target": "cputest_nan"
+    },
+    {
+      "path": "build/cputest/cputest_ni.elf",
+      "sha256": "9c7d1d0d8a7f59e576cfd114ec18ff7a66ddc9aac8501b8a59c235b0da4bd1f0",
+      "size_bytes": 3795304,
+      "suffix": ".elf",
+      "target": "cputest_ni"
+    },
+    {
+      "path": "build/cputest/cputest_pairedmove.elf",
+      "sha256": "a13a6dc406f92aecabbf585036d1d05e8506481bd4e9e4ce67c3a71777bbc078",
+      "size_bytes": 3862316,
+      "suffix": ".elf",
+      "target": "cputest_pairedmove"
+    },
+    {
+      "path": "build/cputest/cputest_reciprocal.elf",
+      "sha256": "ac94372be2536307a71f68b7418324989683c1802d6a5115ffaf14c631fc0f03",
+      "size_bytes": 3816144,
+      "suffix": ".elf",
+      "target": "cputest_reciprocal"
+    },
+    {
+      "path": "build/cputest/cputest_rlw.elf",
+      "sha256": "2d3904ade2eb089d7b3e250d547ebeff5623485f0d74fcb6128023bf3e63cafd",
+      "size_bytes": 3246136,
+      "suffix": ".elf",
+      "target": "cputest_rlw"
+    },
+    {
+      "path": "build/cputest/cputest_srawix.elf",
+      "sha256": "a53518ba3009d92917ced8bf55040185d5f9fe88254e59f02c9588880e82a000",
+      "size_bytes": 3841200,
+      "suffix": ".elf",
+      "target": "cputest_srawix"
+    },
+    {
+      "path": "build/gxtest/gxtest_bitfield.elf",
+      "sha256": "ea79ed906a47a9c2f7b181c4ba30aba70633d484ddd4582f0098e247c6507e24",
+      "size_bytes": 4152732,
+      "suffix": ".elf",
+      "target": "gxtest_bitfield"
+    },
+    {
+      "path": "build/gxtest/gxtest_clipping.elf",
+      "sha256": "142a84edb69bf81b68abb1fea2e8af2b97109857d460ad77d539a6d56bd807c3",
+      "size_bytes": 4032944,
+      "suffix": ".elf",
+      "target": "gxtest_clipping"
+    },
+    {
+      "path": "build/gxtest/gxtest_copyfilter.elf",
+      "sha256": "2f6edbe8fd3854cad29d968326a335c2cdacb7a5e37e3ff39d27159be8c3030e",
+      "size_bytes": 4685652,
+      "suffix": ".elf",
+      "target": "gxtest_copyfilter"
+    },
+    {
+      "path": "build/gxtest/gxtest_intensity.elf",
+      "sha256": "1ab9f2f3090b82e4b07dc7e26bd071956c3514cedc62cb083652727710b60f77",
+      "size_bytes": 4026920,
+      "suffix": ".elf",
+      "target": "gxtest_intensity"
+    },
+    {
+      "path": "build/gxtest/gxtest_lighting.elf",
+      "sha256": "c9f2c1fc33a0d673c84bfb58ab293d04aa41125251b2a2ba0ebbd6de25e547d4",
+      "size_bytes": 4061748,
+      "suffix": ".elf",
+      "target": "gxtest_lighting"
+    },
+    {
+      "path": "build/gxtest/gxtest_rasterization.elf",
+      "sha256": "ffefa28528ca21fc55f76c4309610e000104b19ec6ab375cc4e9918072482310",
+      "size_bytes": 4031260,
+      "suffix": ".elf",
+      "target": "gxtest_rasterization"
+    },
+    {
+      "path": "build/gxtest/gxtest_tev.elf",
+      "sha256": "ebcd0322c542bc606ffc69726992794b79e3929cb1d577fa13f9bddb7d5b4fee",
+      "size_bytes": 4742324,
+      "suffix": ".elf",
+      "target": "gxtest_tev"
+    }
+  ],
+  "experiment_id": "EXP-20260817-005",
+  "interpretation": {
+    "full_upstream_suite_build_qualified": false,
+    "profile_data_examined": false,
+    "profile_data_generated": false,
+    "route_qualified": false,
+    "runtime_fixture_selected": false,
+    "selected_fixture_set_build_qualified": true
+  },
+  "known_full_suite_blocker": {
+    "classification": "upstream_toolchain_drift",
+    "diagnostic_artifact_id": 9314124919,
+    "diagnostic_artifact_sha256": "36c6147dc906261d24d32c6924e92019536b1e00f29bee4d4830c0f0265e3981",
+    "failure_signature": "The current libogc ogc/ipc.h macro HW_IPC_PPCMSG collides with the pinned iostest/ipc.cpp enum member of the same name.",
+    "full_suite_qualified": false,
+    "prior_workflow_run": 32108796444,
+    "source_modified": false,
+    "target": "iostest_ipc_timing"
+  },
+  "qualification_stage": "selected_source_build",
+  "repository": "dolphin-emu/hwtests",
+  "runner": {
+    "label": "ubuntu-24.04",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"
+  },
+  "schema_version": 2,
+  "selection_basis": "Pre-profile source classes and build compatibility only; no runtime, coverage, or performance result was available when this target set was frozen.",
+  "source_commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+  "source_license": "GPL-2.0-or-later",
+  "toolchain": {
+    "image_id": "sha256:0025a9f42f8b7259beeccf2a33fe2e06f7b79c5895f68e118656fb4531418a52",
+    "image_reference_requested": "devkitpro/devkitppc:latest",
+    "reported_environment": [
+      "powerpc-eabi-gcc: powerpc-eabi-gcc (devkitPPC) 16.1.0",
+      "powerpc-eabi-ld: GNU ld (GNU Binutils) 2.46.0.20260210",
+      "cmake: cmake version 3.31.6",
+      "ninja: 1.11.1",
+      "DEVKITPRO=/opt/devkitpro",
+      "DEVKITPPC=/opt/devkitpro/devkitPPC"
+    ],
+    "repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+  }
+}
