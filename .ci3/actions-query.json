@@ -1,5 +1,5 @@
 {
-  "branch": "ci3/exp005-fixture-build-v1",
-  "request_id": 3,
-  "workflow": "ci3-exp005-fixture-build.yml"
+  "branch": "master",
+  "request_id": 4,
+  "workflow": "ci3-apply-text-replacements.yml"
 }
