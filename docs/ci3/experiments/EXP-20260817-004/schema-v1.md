@@ -33,8 +33,9 @@ unique-block census or an execution-frequency profile.
 - within-block GPR reuse-distance counts.
 
 Numeric-map keys are serialized as decimal JSON object keys. Fixed arrays and named feature objects
-have a stable order. All counters are emitted as decimal integers without conversion through
-floating point, preserving the full unsigned 64-bit range in the serialized text.
+have a stable order. All aggregate counts are emitted as decimal JSON strings, without conversion
+through floating point, preserving the full unsigned 64-bit range. `schema_version` remains a JSON
+number because it is a small schema identifier rather than an accumulated measurement.
 
 ## Determinism
 
