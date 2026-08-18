@@ -27,7 +27,8 @@
       "gxtest_lighting",
       "gxtest_rasterization",
       "gxtest_tev"
-    ]
+    ],
+    "successful_workflow_run": 32110199577
   },
   "data_boundary": "Only source/toolchain pins, selected target names, build-log hash, output paths, sizes, hashes, and the known exclusion are committed. Built binaries and raw logs remain uncommitted.",
   "date": "2026-08-18",
