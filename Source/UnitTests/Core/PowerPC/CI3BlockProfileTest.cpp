@@ -228,6 +228,31 @@ TEST(CI3BlockProfile, TracksReuseDistanceBuckets)
   EXPECT_EQ(counts[ToIndex(GPRReuseDistance::ExternalOrEarlierBlock)], 1U);
 }
 
+TEST(CI3BlockProfile, WholeXERAccessesCountAsCarryBoundaries)
+{
+  std::array<GekkoOPInfo, 2> info{};
+  std::array<PPCAnalyst::CodeOp, 2> operations{};
+
+  ConfigureOperation(&operations[0], &info[0], "mfspr", OpType::SPR, 0);
+  operations[0].inst.OPCD = 31;
+  operations[0].inst.SUBOP10 = 339;
+  operations[0].inst.SPRU = 0;
+  operations[0].inst.SPRL = SPR_XER;
+
+  ConfigureOperation(&operations[1], &info[1], "mtspr", OpType::SPR, 0);
+  operations[1].inst.OPCD = 31;
+  operations[1].inst.SUBOP10 = 467;
+  operations[1].inst.SPRU = 0;
+  operations[1].inst.SPRL = SPR_XER;
+
+  BlockProfileAccumulator accumulator;
+  accumulator.ObserveBlock(false, operations);
+  const auto& counts = accumulator.GetData().semantic_feature_counts;
+
+  EXPECT_EQ(counts[ToIndex(SemanticFeature::Carry)], 2U);
+  EXPECT_EQ(counts[ToIndex(SemanticFeature::SystemState)], 2U);
+}
+
 TEST(CI3BlockProfile, CountsOverlappingSemanticFeatures)
 {
   std::array<GekkoOPInfo, 2> info{};

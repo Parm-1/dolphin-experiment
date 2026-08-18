@@ -73,6 +73,17 @@ bool IsFloatingPointType(OpType type)
   }
 }
 
+bool AccessesXER(UGeckoInstruction instruction)
+{
+  if (instruction.OPCD != 31 ||
+      (instruction.SUBOP10 != 339 && instruction.SUBOP10 != 467))
+  {
+    return false;
+  }
+
+  return ((instruction.SPRU << 5) | (instruction.SPRL & 0x1f)) == SPR_XER;
+}
+
 bool IsSystemStateType(OpType type)
 {
   switch (type)
@@ -112,7 +123,7 @@ void ObserveSemanticFeatures(BlockProfileData* data, const PPCAnalyst::CodeOp& o
     IncrementSemanticFeature(data, SemanticFeature::Exception);
 
   if ((flags & (FL_SET_CA | FL_READ_CA)) != 0 || operation.wantsCAInFlags ||
-      operation.outputCA)
+      operation.outputCA || AccessesXER(operation.inst))
   {
     IncrementSemanticFeature(data, SemanticFeature::Carry);
   }
