@@ -68,14 +68,17 @@ jobs:
           set -euo pipefail
           python3 - <<'PY' > /tmp/ci3-real-collection-env
           import json
+          import shlex
           from pathlib import Path
 
           manifest = json.loads(
               Path("docs/ci3/experiments/EXP-20260817-005/fixture-manifest-v2.json").read_text()
           )
-          print("HWTESTS_COMMIT=" + manifest["source"]["commit"])
-          print("TOOLCHAIN=" + manifest["source"]["toolchain_repository_digest"])
-          print("TARGETS=" + " ".join(f["source"]["build_target"] for f in manifest["fixtures"]))
+          print("HWTESTS_COMMIT=" + shlex.quote(manifest["source"]["commit"]))
+          print("TOOLCHAIN=" + shlex.quote(manifest["source"]["toolchain_repository_digest"]))
+          print("TARGETS=" + shlex.quote(" ".join(
+              f["source"]["build_target"] for f in manifest["fixtures"]
+          )))
           PY
           source /tmp/ci3-real-collection-env
 
