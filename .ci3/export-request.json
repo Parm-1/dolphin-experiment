@@ -1,5 +1,5 @@
 {
-  "artifact_name": "ci3-pr10-workflow-source",
+  "artifact_name": "ci3-pr10-workflow-source-v2",
   "branch": "ci3/exp005-fixture-build-v1",
   "path": ".github/workflows/ci3-exp005-fixture-build.yml"
 }
