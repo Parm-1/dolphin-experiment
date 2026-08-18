@@ -1,0 +1,7 @@
+{
+  "artifact_name": "ci3-pr10-workflow-source",
+  "branch": "ci3/exp005-fixture-build-v1",
+  "head_sha": "62beb64946cc140ae642dd9c2940945910262931",
+  "path": ".github/workflows/ci3-exp005-fixture-build.yml",
+  "run_id": 32106524673
+}
