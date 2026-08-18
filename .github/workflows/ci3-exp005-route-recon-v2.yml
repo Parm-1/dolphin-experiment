@@ -267,7 +267,7 @@ jobs:
                   profile_path = run_root / 'ci3-profile.json'
                   command = [
                       'timeout', '--signal=TERM', '--kill-after=5s', '12s',
-                      str(binary), '-b', '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
+                      str(binary), '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
                       '-C', 'Dolphin.Core.CPUCore=2',
                       '-C', 'Dolphin.Core.DSPHLE=True',
                   ]
