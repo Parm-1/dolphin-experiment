@@ -18,7 +18,7 @@ jobs:
         with:
           ref: master
           fetch-depth: 0
-      - name: Resolve and export requested branch file
+      - name: Resolve requested branch file
         id: request
         shell: bash
         run: |
@@ -39,6 +39,10 @@ jobs:
           print(f'path={path}')
           print(f'artifact_name={name}')
           PY
+      - name: Export requested file
+        shell: bash
+        run: |
+          set -euo pipefail
           git fetch --no-tags origin "${{ steps.request.outputs.branch }}"
           mkdir -p /tmp/ci3-export
           git show "FETCH_HEAD:${{ steps.request.outputs.path }}" > /tmp/ci3-export/exported-file
