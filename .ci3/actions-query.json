@@ -1,0 +1,4 @@
+{
+  "branch": "ci3/exp005-fixture-build-v1",
+  "workflow": "ci3-exp005-fixture-build.yml"
+}
