@@ -54,9 +54,9 @@ jobs:
           docker run --rm devkitpro/devkitppc:latest bash -lc '
             set -e
             printf "powerpc-eabi-gcc: "
-            powerpc-eabi-gcc --version | head -1
+            "$DEVKITPPC/bin/powerpc-eabi-gcc" --version | head -1
             printf "powerpc-eabi-ld: "
-            powerpc-eabi-ld --version | head -1
+            "$DEVKITPPC/bin/powerpc-eabi-ld" --version | head -1
             printf "make: "
             make --version | head -1
             printf "DEVKITPRO=%s\nDEVKITPPC=%s\n" "$DEVKITPRO" "$DEVKITPPC"
@@ -71,7 +71,7 @@ jobs:
             -v "$PWD/hwtests:/work" \
             -w /work \
             devkitpro/devkitppc:latest \
-            bash -lc 'set -o pipefail; make -j2' \
+            bash -lc 'set -o pipefail; MAKEFLAGS=-j2 ./build.sh' \
             2>&1 | tee build.txt
           status=${PIPESTATUS[0]}
           printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
@@ -162,7 +162,7 @@ jobs:
                   'reported_environment': environment_lines,
               },
               'build': {
-                  'command': "docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'make -j2'",
+                  'command': "docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'MAKEFLAGS=-j2 ./build.sh'",
                   'exit_status': 0,
                   'build_log_sha256': sha256(build_log),
                   'generated_file_count': len(generated_paths),
@@ -193,7 +193,7 @@ jobs:
               '',
               f"- Pinned source: `dolphin-emu/hwtests@{os.environ['HWTESTS_COMMIT']}`",
               f"- Recorded toolchain digest: `{os.environ['TOOLCHAIN_REPO_DIGEST']}`",
-              '- Build command: root `make -j2` inside the recorded devkitPPC container',
+              '- Build command: upstream `./build.sh` with `MAKEFLAGS=-j2` inside the recorded devkitPPC container',
               f'- Executable outputs: {len(executable_outputs)}',
               f'- Generated files observed: {len(generated_paths)}',
               f'- Raw build-log SHA-256: `{sha256(build_log)}`',
