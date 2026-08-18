@@ -6,28 +6,7 @@
     "executable_output_count": 20,
     "exit_status": 0,
     "selected_target_count": 20,
-    "selected_targets": [
-      "cputest_cr",
-      "cputest_fctiw",
-      "cputest_fctiwz",
-      "cputest_frsp",
-      "cputest_fprf",
-      "cputest_load",
-      "cputest_mtspr",
-      "cputest_nan",
-      "cputest_ni",
-      "cputest_pairedmove",
-      "cputest_reciprocal",
-      "cputest_rlw",
-      "cputest_srawix",
-      "gxtest_bitfield",
-      "gxtest_clipping",
-      "gxtest_copyfilter",
-      "gxtest_intensity",
-      "gxtest_lighting",
-      "gxtest_rasterization",
-      "gxtest_tev"
-    ],
+    "selected_targets": ["cputest_cr","cputest_fctiw","cputest_fctiwz","cputest_frsp","cputest_fprf","cputest_load","cputest_mtspr","cputest_nan","cputest_ni","cputest_pairedmove","cputest_reciprocal","cputest_rlw","cputest_srawix","gxtest_bitfield","gxtest_clipping","gxtest_copyfilter","gxtest_intensity","gxtest_lighting","gxtest_rasterization","gxtest_tev"],
     "successful_workflow_run": 32110199577
   },
   "data_boundary": "Only source/toolchain pins, selected target names, build-log hash, output paths, sizes, hashes, and the known exclusion are committed. Built binaries and raw logs remain uncommitted.",
@@ -55,45 +34,14 @@
     {"path":"build/gxtest/gxtest_tev.elf","sha256":"ebcd0322c542bc606ffc69726992794b79e3929cb1d577fa13f9bddb7d5b4fee","size_bytes":4742324,"suffix":".elf","target":"gxtest_tev"}
   ],
   "experiment_id": "EXP-20260817-005",
-  "interpretation": {
-    "full_upstream_suite_build_qualified": false,
-    "profile_data_examined": false,
-    "profile_data_generated": false,
-    "route_qualified": false,
-    "runtime_fixture_selected": false,
-    "selected_fixture_set_build_qualified": true
-  },
-  "known_full_suite_blocker": {
-    "classification": "upstream_toolchain_drift",
-    "diagnostic_artifact_id": 9314124919,
-    "diagnostic_artifact_sha256": "36c6147dc906261d24d32c6924e92019536b1e00f29bee4d4830c0f0265e3981",
-    "failure_signature": "The current libogc ogc/ipc.h macro HW_IPC_PPCMSG collides with the pinned iostest/ipc.cpp enum member of the same name.",
-    "full_suite_qualified": false,
-    "prior_workflow_run": 32108796444,
-    "source_modified": false,
-    "target": "iostest_ipc_timing"
-  },
+  "interpretation": {"full_upstream_suite_build_qualified":false,"profile_data_examined":false,"profile_data_generated":false,"route_qualified":false,"runtime_fixture_selected":false,"selected_fixture_set_build_qualified":true},
+  "known_full_suite_blocker": {"classification":"upstream_toolchain_drift","diagnostic_artifact_id":9314124919,"diagnostic_artifact_sha256":"36c6147dc906261d24d32c6924e92019536b1e00f29bee4d4830c0f0265e3981","failure_signature":"The current libogc ogc/ipc.h macro HW_IPC_PPCMSG collides with the pinned iostest/ipc.cpp enum member of the same name.","full_suite_qualified":false,"prior_workflow_run":32108796444,"source_modified":false,"target":"iostest_ipc_timing"},
   "qualification_stage": "selected_source_build",
   "repository": "dolphin-emu/hwtests",
-  "runner": {
-    "label": "ubuntu-24.04",
-    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"
-  },
+  "runner": {"label":"ubuntu-24.04","platform":"Linux-6.17.0-1022-azure-x86_64-with-glibc2.39"},
   "schema_version": 2,
   "selection_basis": "Pre-profile source classes and build compatibility only; no runtime, coverage, or performance result was available when this target set was frozen.",
   "source_commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
   "source_license": "GPL-2.0-or-later",
-  "toolchain": {
-    "image_id": "sha256:0025a9f42f8b7259beeccf2a33fe2e06f7b79c5895f68e118656fb4531418a52",
-    "image_reference_requested": "devkitpro/devkitppc:latest",
-    "reported_environment": [
-      "powerpc-eabi-gcc: powerpc-eabi-gcc (devkitPPC) 16.1.0",
-      "powerpc-eabi-ld: GNU ld (GNU Binutils) 2.46.0.20260210",
-      "cmake: cmake version 3.31.6",
-      "ninja: 1.11.1",
-      "DEVKITPRO=/opt/devkitpro",
-      "DEVKITPPC=/opt/devkitpro/devkitPPC"
-    ],
-    "repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
-  }
+  "toolchain": {"image_id":"sha256:0025a9f42f8b7259beeccf2a33fe2e06f7b79c5895f68e118656fb4531418a52","image_reference_requested":"devkitpro/devkitppc:latest","reported_environment":["powerpc-eabi-gcc: powerpc-eabi-gcc (devkitPPC) 16.1.0","powerpc-eabi-ld: GNU ld (GNU Binutils) 2.46.0.20260210","cmake: cmake version 3.31.6","ninja: 1.11.1","DEVKITPRO=/opt/devkitpro","DEVKITPPC=/opt/devkitpro/devkitPPC"],"repository_digest":"devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"}
 }
