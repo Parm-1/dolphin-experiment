@@ -305,7 +305,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf hwtests toolchain-pull.txt toolchain-environment.txt build.txt
+          sudo rm -rf hwtests toolchain-pull.txt toolchain-environment.txt build.txt
           git diff --check
           python3 - <<'PY'
           import subprocess
