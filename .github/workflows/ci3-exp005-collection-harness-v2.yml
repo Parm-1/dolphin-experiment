@@ -1,0 +1,137 @@
+name: CI3 EXP-005 Collection Harness v2
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - ".github/workflows/ci3-exp005-collection-harness-v2.yml"
+      - "Tools/ci3/exp005/collect_exp005.py"
+      - "Tools/ci3/exp005/test_collect_exp005.py"
+      - "docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-plan.md"
+      - "docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-verdict.md"
+      - "docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-evidence.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-harness:
+    name: validate-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out candidate harness
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify prerequisite and compile harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 278e2b4a36835fbdfbcd65ba87017f8fa0ea3f17 HEAD
+          python3 -m py_compile \
+            Tools/ci3/exp005/collect_exp005.py \
+            Tools/ci3/exp005/test_collect_exp005.py
+          rm -rf Tools/ci3/exp005/__pycache__
+          python3 Tools/ci3/exp005/collect_exp005.py check-frozen --repository . \
+            | tee ci3-collection-freeze-check.txt
+
+      - name: Run synthetic fail-closed test suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 Tools/ci3/exp005/test_collect_exp005.py -v 2>&1 \
+            | tee ci3-collection-harness-tests.txt
+          grep -Eq '^OK$|^OK \(' ci3-collection-harness-tests.txt
+
+      - name: Enforce publication scope
+        if: runner.os == 'Linux' && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git diff --check "$BASE_SHA"...HEAD
+          python3 - <<'PY'
+          import os
+          import subprocess
+
+          allowed = {
+              '.github/workflows/ci3-exp005-collection-harness-v2.yml',
+              'Tools/ci3/exp005/collect_exp005.py',
+              'Tools/ci3/exp005/test_collect_exp005.py',
+              'docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-plan.md',
+              'docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-verdict.md',
+              'docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-evidence.json',
+          }
+          required = {
+              '.github/workflows/ci3-exp005-collection-harness-v2.yml',
+              'Tools/ci3/exp005/collect_exp005.py',
+              'Tools/ci3/exp005/test_collect_exp005.py',
+              'docs/ci3/experiments/EXP-20260817-005/collection-harness-v2-plan.md',
+          }
+          actual = set(subprocess.check_output(
+              ['git', 'diff', '--name-only', f"{os.environ['BASE_SHA']}...HEAD"], text=True
+          ).splitlines())
+          if not required <= actual or not actual <= allowed:
+              raise SystemExit(
+                  f'unexpected scope: missing_required={sorted(required-actual)}, '
+                  f'extra={sorted(actual-allowed)}'
+              )
+          PY
+
+      - name: Record bounded test evidence
+        shell: bash
+        env:
+          RUNNER_OS_NAME: ${{ runner.os }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+
+          def sha(path):
+              return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+          evidence = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'stage': 'fail_closed_collection_harness_v2_validation',
+              'head_sha': subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+              'runner_os': os.environ['RUNNER_OS_NAME'],
+              'platform': platform.platform(),
+              'python': platform.python_version(),
+              'freeze_check_sha256': sha('ci3-collection-freeze-check.txt'),
+              'test_log_sha256': sha('ci3-collection-harness-tests.txt'),
+              'freeze_check_passed': True,
+              'synthetic_test_suite_passed': True,
+              'real_collection_executed': False,
+              'analysis_performed': False,
+              'decision': 'PASS_HARNESS_VALIDATION_ONLY',
+          }
+          Path('ci3-collection-harness-evidence.json').write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          PY
+
+      - name: Upload bounded harness evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-collection-harness-v2-${{ runner.os }}
+          path: |
+            ci3-collection-freeze-check.txt
+            ci3-collection-harness-tests.txt
+            ci3-collection-harness-evidence.json
+          if-no-files-found: error
+          retention-days: 30

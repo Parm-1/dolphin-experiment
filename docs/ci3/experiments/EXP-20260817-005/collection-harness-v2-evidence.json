@@ -1,0 +1,61 @@
+{
+  "analysis_performed": false,
+  "artifact_archives": {
+    "linux": {
+      "artifact_id": 9336051884,
+      "artifact_sha256": "bd288c938c890b82c6fe98711f4ae6f58e88614f9a616de7ee7746c5a7d2ebc0",
+      "evidence_file_sha256": "84d36702dad78b3eb0b14233dfb73d7bcecf3e459b786e98952f28d509d02782",
+      "freeze_check_sha256": "a24a87ed816f3710fbb3d8ae11c2b15129e797aa7407f65cd2d09b8724a3d8b4",
+      "job_id": 95810963686,
+      "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+      "python": "3.12.3",
+      "test_log_sha256": "0295286ce2605c1707124c62a557046956010757a64971ae888a3dfb69009a8b"
+    },
+    "macos": {
+      "artifact_id": 9336067048,
+      "artifact_sha256": "f2a5e19a096e982fe9e9ea85db2e40126f3cf2943aeb694ddc2e6d4b3720ab8a",
+      "evidence_file_sha256": "9b0f34005db18ce670c36d9b8ca2e09d6010552d730aa0ed3ba2fda266992e7e",
+      "freeze_check_sha256": "a24a87ed816f3710fbb3d8ae11c2b15129e797aa7407f65cd2d09b8724a3d8b4",
+      "job_id": 95810963684,
+      "platform": "macOS-15.7.7-arm64-arm-64bit-Mach-O",
+      "python": "3.14.6",
+      "test_log_sha256": "cd2d0fd3b7b77355fc78122bf59456d197959f07e772f62aaec9d7de0249177d"
+    }
+  },
+  "data_boundary": {
+    "commercial_content_committed": false,
+    "fixture_binaries_committed": false,
+    "guest_addresses_committed": false,
+    "guest_instruction_words_committed": false,
+    "profile_outputs_committed": false,
+    "raw_logs_committed": false,
+    "user_directories_committed": false
+  },
+  "decision": "PASS_COLLECTION_HARNESS_AND_PROCEED_TO_SEPARATE_REAL_COLLECTION_GATE",
+  "experiment_id": "EXP-20260817-005",
+  "freeze": {
+    "fixture_manifest_git_blob": "119e00ec23fdf8421caaffcead98d091a9d81314",
+    "merge_commit": "278e2b4a36835fbdfbcd65ba87017f8fa0ea3f17",
+    "run_order_git_blob": "8c4290d526d69a27e4fff7256b41c6ca79bc1487",
+    "run_order_sha256": "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85"
+  },
+  "gate_passed": true,
+  "invalidated_workflow_runs": [
+    {
+      "reason": "macOS synthetic normalization test exposed lexical /var versus canonical /private/var path mismatch; Ubuntu passed; corrected before valid gate run",
+      "run_id": 32167048386
+    },
+    {
+      "reason": "bot-authored synchronization produced action_required with no jobs; superseded by user-authored evidence-note commit",
+      "run_id": 32167492691
+    }
+  ],
+  "pr_number": 19,
+  "real_collection_executed": false,
+  "schema_version": 1,
+  "stage": "fail_closed_collection_harness_v2",
+  "synthetic_tests_per_target": 12,
+  "tested_branch_head_sha": "5e02ee8a0132b4677037975b76b32a3a38c8bef6",
+  "tested_pr_merge_ref_sha": "262870ee30fc0967b59e0408dd3ac240a8b4784e",
+  "workflow_run_id": 32167670558
+}
