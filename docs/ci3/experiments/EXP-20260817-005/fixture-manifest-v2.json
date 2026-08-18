@@ -1,0 +1,420 @@
+{
+  "data_boundary": {
+    "disassembly_committed": false,
+    "fixture_binaries_committed": false,
+    "guest_addresses_committed": false,
+    "guest_instruction_words_committed": false,
+    "profile_outputs_committed": false,
+    "proprietary_content_committed": false,
+    "raw_logs_committed": false,
+    "user_directories_committed": false
+  },
+  "date": "2026-08-18",
+  "experiment_id": "EXP-20260817-005",
+  "fixtures": [
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "2d3904ade2eb089d7b3e250d547ebeff5623485f0d74fcb6128023bf3e63cafd",
+        "binary_size_bytes": 3246136,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_rlw",
+      "fixture_id": "F01",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_rlw",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_rlw.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "integer_control"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "a6ad00f9399816530cb95e6fb659030ba51a5748c3abc5f3163cb50abd14d95b",
+        "binary_size_bytes": 3776656,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_cr",
+      "fixture_id": "F02",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_cr",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_cr.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "integer_control"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "0647e3e92f3504806ee73a25b4b35b35b64424b41617504577719e4ec9f65af2",
+        "binary_size_bytes": 3233404,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_load",
+      "fixture_id": "F03",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_load",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_load.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "memory_system"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "32d40f003954a063fc940bc3f15b989ac8a349801caff84fd1dfc01ba5271f19",
+        "binary_size_bytes": 3771824,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_mtspr",
+      "fixture_id": "F04",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_mtspr",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_mtspr.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "memory_system"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "d6a6f6c9852b39c6cb33cb44fc0115be776ead9ce9abcf3d835f5872985c936a",
+        "binary_size_bytes": 3774596,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_frsp",
+      "fixture_id": "F05",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_frsp",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_frsp.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "floating_paired"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "a13a6dc406f92aecabbf585036d1d05e8506481bd4e9e4ce67c3a71777bbc078",
+        "binary_size_bytes": 3862316,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "cputest_pairedmove",
+      "fixture_id": "F06",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "cputest_pairedmove",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/cputest/cputest_pairedmove.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "floating_paired"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "ea79ed906a47a9c2f7b181c4ba30aba70633d484ddd4582f0098e247c6507e24",
+        "binary_size_bytes": 4152732,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "gxtest_bitfield",
+      "fixture_id": "F07",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "gxtest_bitfield",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/gxtest/gxtest_bitfield.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "gpu_pipeline"
+    },
+    {
+      "build": {
+        "binary_committed": false,
+        "binary_sha256": "ebcd0322c542bc606ffc69726992794b79e3929cb1d577fa13f9bddb7d5b4fee",
+        "binary_size_bytes": 4742324,
+        "build_command_template": "cmake --build build --parallel 2 --target <selected_targets>",
+        "configure_command": "cmake -S . -B build -G Ninja -DCMAKE_TOOLCHAIN_FILE=toolchain-powerpc.cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo",
+        "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+      },
+      "candidate_id": "gxtest_tev",
+      "fixture_id": "F08",
+      "route_qualification": {
+        "architectural_correctness_claimed": false,
+        "architectural_result_marker_seen": false,
+        "cached_interpreter_text_marker_seen": false,
+        "cpu_core_configuration": "Dolphin.Core.CPUCore=5",
+        "dsp_configuration": "Dolphin.Core.DSPHLE=True",
+        "expected_exit_status": -15,
+        "expected_termination_stage": "second_sigterm",
+        "normalized_bytes": 67,
+        "normalized_lines": 2,
+        "normalized_output_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "panic_or_crash_seen": false,
+        "process_survived_to_timeout": true,
+        "profile_created_while_disabled": false,
+        "repetitions": 3,
+        "route_signature_sha256": "8d6897f3ac80ad95d8f1a5764e41d889351d44cf41e6935b6f1b5484a9a979ca",
+        "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+        "timeout_seconds": 12,
+        "video_backend": "Null",
+        "workflow_run": 32124068535
+      },
+      "selection_reason": "All eight preregistered route candidates qualified; none was removed or ranked using profile, timing, coverage, or performance data.",
+      "source": {
+        "build_target": "gxtest_tev",
+        "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+        "license": "GPL-2.0-or-later",
+        "relative_output": "build/gxtest/gxtest_tev.elf",
+        "repository": "dolphin-emu/hwtests"
+      },
+      "workload_class": "gpu_pipeline"
+    }
+  ],
+  "interpretation_boundary": [
+    "Routes are reproducible launch/stop evidence, not architectural test completion.",
+    "The logs did not textually confirm Cached Interpreter or fixture-specific pass markers.",
+    "No profiler overhead, coverage, lowering value, Dolphin speedup, game result, iPhone result, or Gate 2 completion is established."
+  ],
+  "measurement": {
+    "measured_pairs_per_fixture": 8,
+    "schedule_file": "run-order-v2.json",
+    "schedule_sha256": "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85",
+    "total_measured_pairs": 64,
+    "total_measured_runs": 128,
+    "total_scheduled_runs": 160,
+    "total_warmup_runs": 32,
+    "warmup_runs_per_fixture": 4
+  },
+  "next_authorized_step": "Implement a fail-closed collection harness that executes this schedule exactly and rejects missing pairs, unstable treatment profiles, or route drift before analysis.",
+  "prerequisites": {
+    "route_reconnaissance": {
+      "artifact_id": 9320322911,
+      "artifact_sha256": "c98bc4432ae5f7b18b35922a9c6d2f052b5c14128ff4f3df9ad0bb4d3ebf0692",
+      "manifest_blob_sha": "6be307b8d4ed0a52bd56241d674573691592a20c",
+      "merge_commit": "4b67e513f913c77e534aaf50d6b7ecae8780d7b2",
+      "result_blob_sha": "c26e885b6a05da9da3bedc816d25f9e731d5e52b",
+      "result_sha256": "f0cb4bbb718bd442f78e6526d561fb88fbc409ee2fa99546b4391032cc178c94",
+      "tested_merge_ref": "01faa904e1caff3195b2d8185416c9d8f43479b1",
+      "workflow_run": 32124068535
+    },
+    "source_build": {
+      "evidence_blob_sha": "a02e8596612e34093e4d64af3a3a68681d85320a",
+      "merge_commit": "70abc18a2fb0d56135dcc35a41d988a50b53c7bc",
+      "workflow_run": 32110199577
+    }
+  },
+  "schema_version": 2,
+  "selection": {
+    "candidate_count": 8,
+    "coverage_data_used_for_selection": false,
+    "fixtures_per_class": {
+      "floating_paired": 2,
+      "gpu_pipeline": 2,
+      "integer_control": 2,
+      "memory_system": 2
+    },
+    "profile_data_examined_before_freeze": false,
+    "profile_data_generated_before_freeze": false,
+    "rule": "Include every candidate in the preregistered v2 route order only if all eight qualify; any removal, replacement, or reorder requires a new freeze version.",
+    "timing_data_used_for_selection": false,
+    "workload_class_count": 4
+  },
+  "source": {
+    "commit": "f28077b139eec18967f60db6ce1e15b182dfeac0",
+    "full_upstream_suite_blocker": {
+      "classification": "upstream_toolchain_drift",
+      "diagnostic_artifact_id": 9314124919,
+      "diagnostic_artifact_sha256": "36c6147dc906261d24d32c6924e92019536b1e00f29bee4d4830c0f0265e3981",
+      "failure_signature": "The current libogc ogc/ipc.h macro HW_IPC_PPCMSG collides with the pinned iostest/ipc.cpp enum member of the same name.",
+      "full_suite_qualified": false,
+      "prior_workflow_run": 32108796444,
+      "source_modified": false,
+      "target": "iostest_ipc_timing"
+    },
+    "full_upstream_suite_build_qualified": false,
+    "license": "GPL-2.0-or-later",
+    "repository": "dolphin-emu/hwtests",
+    "toolchain_repository_digest": "devkitpro/devkitppc@sha256:44cb1a920e1ec3ec7c06767493c3b85f8d643d6137cc4661f0201895ac6e4967"
+  },
+  "stage": "fixture_and_schedule_freeze_v2",
+  "state": "FROZEN_BEFORE_PROFILE_ACCESS"
+}

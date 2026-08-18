@@ -1,0 +1,48 @@
+{
+  "decision": "PASS_FREEZE_AND_PROCEED_TO_FAIL_CLOSED_COLLECTION_HARNESS",
+  "experiment_id": "EXP-20260817-005",
+  "fixture_count": 8,
+  "gate_passed": true,
+  "inputs": {
+    "build-qualification-v1.json": {
+      "git_blob_sha": "a02e8596612e34093e4d64af3a3a68681d85320a"
+    },
+    "route-recon-v2-manifest.json": {
+      "git_blob_sha": "6be307b8d4ed0a52bd56241d674573691592a20c"
+    },
+    "route-recon-v2.json": {
+      "git_blob_sha": "c26e885b6a05da9da3bedc816d25f9e731d5e52b",
+      "sha256": "f0cb4bbb718bd442f78e6526d561fb88fbc409ee2fa99546b4391032cc178c94"
+    }
+  },
+  "measured_pair_count": 64,
+  "measured_run_count": 128,
+  "outputs": {
+    "fixture-freeze-v2.md": {
+      "sha256": "7484ba5ec2e2bd47ee3f914d151cd65078384d5bd642539915c02eaacca32d62"
+    },
+    "fixture-manifest-v2.json": {
+      "sha256": "79945e2e5c5ae12f754fb2db97db70f0f650ff163814c06a6104edf7d3c6f0db"
+    },
+    "run-order-v2.json": {
+      "sha256": "e21f81d5f343d23a9feef0852f1dbcc8e625bec3a978a44a03e0baba2e33db85"
+    }
+  },
+  "schema_version": 1,
+  "stage": "fixture_and_schedule_freeze_v2",
+  "total_scheduled_run_count": 160,
+  "validation": {
+    "all_route_candidates_included": true,
+    "condition_order_balanced": true,
+    "exactly_two_fixtures_per_class": true,
+    "fixture_positions_balanced": true,
+    "pair_schedule_complete": true,
+    "profile_disabled_during_prerequisite_route": true,
+    "raw_or_proprietary_data_committed": false,
+    "route_invariants_singular": true,
+    "source_build_fields_match": true,
+    "treatment_profile_tokens_unique": true
+  },
+  "warmup_run_count": 32,
+  "workload_class_count": 4
+}
