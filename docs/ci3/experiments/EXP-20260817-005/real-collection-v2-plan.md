@@ -115,6 +115,21 @@ A failed collection blocks analysis. The project must decide whether the cause i
 - harness defect;
 - another explicitly recorded condition.
 
+## Invalidated pre-collection setup run
+
+Workflow `32188367815` stopped before fixture cloning, fixture compilation, Dolphin compilation, or
+profile collection. The generated shell environment wrote the multi-target value without quoting;
+when sourced, `cputest_cr` was interpreted as a command.
+
+The bounded-failure path succeeded and uploaded artifact `9343396047` with SHA-256
+`007d504cc5d34a49dc1319f678c3cac36c09c03f4bd9d500eb7a6d15e2636d71`. It contains no fixture,
+profile, raw log, user directory, or analysis data.
+
+The correction applies shell quoting with Python `shlex.quote` to all generated assignments. It
+does not change the fixture set, hashes, toolchain, route, schedule, stop controller, pass threshold,
+or data boundary. Run `32188367815` is setup-methodology evidence only and cannot support the
+collection gate decision.
+
 ## Data boundary
 
 Durable evidence may contain only:
