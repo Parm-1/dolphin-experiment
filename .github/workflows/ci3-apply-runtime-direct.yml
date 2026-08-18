@@ -21,9 +21,11 @@ jobs:
 
       - name: Generate reviewed integration
         shell: bash
-        run: python3 Tools/ci3/exp004/apply_runtime_integration.py
+        run: |
+          python3 Tools/ci3/exp004/apply_runtime_integration.py
+          git checkout HEAD -- .github/workflows
 
-      - name: Validate exact scope and publish
+      - name: Validate source scope and publish
         shell: bash
         run: |
           git diff --check
@@ -31,12 +33,6 @@ jobs:
           import subprocess
 
           allowed = {
-              '.github/workflows/ci3-apply-runtime-direct.yml',
-              '.github/workflows/ci3-apply-runtime-now.yml',
-              '.github/workflows/ci3-apply-runtime-patch.yml',
-              '.github/workflows/ci3-export-runtime-payload.yml',
-              '.github/workflows/ci3-export-runtime-sources.yml',
-              '.github/workflows/ci3-powerpc-differential.yml',
               'Source/Core/Core/CMakeLists.txt',
               'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp',
               'Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h',
@@ -55,8 +51,17 @@ jobs:
           PY
           git config user.name 'Parm-1'
           git config user.email '75600769+Parm-1@users.noreply.github.com'
-          git add -A
+          git add -A -- \
+            Source/Core/Core/CMakeLists.txt \
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp \
+            Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h \
+            Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp \
+            Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h \
+            Source/UnitTests/Core/CMakeLists.txt \
+            Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp \
+            Tools/ci3/exp004/apply_runtime_integration.py \
+            docs/ci3/experiments/EXP-20260817-004/runtime-v1.md
           git commit \
             -m 'CI3: integrate opt-in aggregate block profiler' \
-            -m 'Add environment-gated Cached Interpreter collection, explicit orderly-shutdown JSON flush, output-lifecycle tests, and three-target CI coverage. The disabled path allocates no profiler and creates no file. No execution backend or performance claim is introduced.'
+            -m 'Add environment-gated Cached Interpreter collection, explicit orderly-shutdown JSON flush, and output-lifecycle tests. The disabled path allocates no profiler and creates no file. Workflow cleanup and validation wiring are applied separately by the connected GitHub app.'
           git push origin HEAD:ci3/block-profile-runtime-v1
