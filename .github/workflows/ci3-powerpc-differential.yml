@@ -5,12 +5,17 @@ on:
     paths:
       - ".github/workflows/ci3-powerpc-differential.yml"
       - "Source/Core/Core/CMakeLists.txt"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
       - "Source/Core/Core/PowerPC/CI3/BlockProfile.cpp"
       - "Source/Core/Core/PowerPC/CI3/BlockProfile.h"
       - "Source/Core/Core/PowerPC/CI3/BlockProfileJson.cpp"
       - "Source/Core/Core/PowerPC/CI3/BlockProfileJson.h"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h"
       - "Source/UnitTests/Core/CMakeLists.txt"
       - "Source/UnitTests/Core/PowerPC/CI3BlockProfileJsonTest.cpp"
+      - "Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3BlockProfileTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
   push:
@@ -19,12 +24,17 @@ on:
     paths:
       - ".github/workflows/ci3-powerpc-differential.yml"
       - "Source/Core/Core/CMakeLists.txt"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.cpp"
+      - "Source/Core/Core/PowerPC/CachedInterpreter/CachedInterpreter.h"
       - "Source/Core/Core/PowerPC/CI3/BlockProfile.cpp"
       - "Source/Core/Core/PowerPC/CI3/BlockProfile.h"
       - "Source/Core/Core/PowerPC/CI3/BlockProfileJson.cpp"
       - "Source/Core/Core/PowerPC/CI3/BlockProfileJson.h"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.cpp"
+      - "Source/Core/Core/PowerPC/CI3/BlockProfileRuntime.h"
       - "Source/UnitTests/Core/CMakeLists.txt"
       - "Source/UnitTests/Core/PowerPC/CI3BlockProfileJsonTest.cpp"
+      - "Source/UnitTests/Core/PowerPC/CI3BlockProfileRuntimeTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3BlockProfileTest.cpp"
       - "Source/UnitTests/Core/PowerPC/CI3IntegerDifferentialTest.cpp"
   workflow_dispatch:
@@ -156,7 +166,7 @@ jobs:
         shell: bash
         run: |
           ./build/ci3-powerpc/Binaries/Tests/tests \
-            --gtest_filter='CI3PowerPCIntegerDifferential.*:CI3BlockProfile.*:CI3BlockProfileJson.*' \
+            --gtest_filter='CI3PowerPCIntegerDifferential.*:CI3BlockProfile.*:CI3BlockProfileJson.*:CI3BlockProfileRuntime.*' \
             --gtest_color=no \
             2>&1 | tee "results/${{ matrix.slug }}/test.txt"
 

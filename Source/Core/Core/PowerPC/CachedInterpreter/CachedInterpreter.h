@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstddef>
+#include <memory>
 
 #include "Common/CommonTypes.h"
 #include "Common/RangeSizeSet.h"
@@ -11,6 +12,11 @@
 #include "Core/PowerPC/CachedInterpreter/CachedInterpreterEmitter.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/PPCAnalyst.h"
+
+namespace PowerPC::CI3
+{
+class BlockProfileRuntime;
+}
 
 namespace CoreTiming
 {
@@ -113,6 +119,7 @@ private:
 
   Common::RangeSizeSet<u8*> m_free_ranges;
   CachedInterpreterBlockCache m_block_cache;
+  std::unique_ptr<PowerPC::CI3::BlockProfileRuntime> m_ci3_block_profile;
 };
 
 struct CachedInterpreter::StartProfiledBlockOperands

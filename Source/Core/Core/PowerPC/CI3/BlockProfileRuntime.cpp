@@ -1,0 +1,38 @@
+// Copyright 2026 Dolphin Emulator Project
+// SPDX-License-Identifier: GPL-2.0-or-later
+
+#include "Core/PowerPC/CI3/BlockProfileRuntime.h"
+
+#include <utility>
+
+#include "Common/FileUtil.h"
+#include "Core/PowerPC/CI3/BlockProfileJson.h"
+
+namespace PowerPC::CI3
+{
+
+BlockProfileRuntime::BlockProfileRuntime(std::string output_path)
+    : m_output_path(std::move(output_path))
+{
+}
+
+void BlockProfileRuntime::ObserveBlock(bool broken,
+                                       std::span<const PPCAnalyst::CodeOp> operations)
+{
+  m_accumulator.ObserveBlock(broken, operations);
+}
+
+bool BlockProfileRuntime::Flush() const
+{
+  return File::WriteStringToFile(m_output_path, SerializeBlockProfile(m_accumulator.GetData()));
+}
+
+std::unique_ptr<BlockProfileRuntime> CreateBlockProfileRuntime(const char* output_path)
+{
+  if (output_path == nullptr || output_path[0] == '\0')
+    return nullptr;
+
+  return std::make_unique<BlockProfileRuntime>(output_path);
+}
+
+}  // namespace PowerPC::CI3
