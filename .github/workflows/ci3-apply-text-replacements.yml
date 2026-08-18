@@ -48,27 +48,30 @@ jobs:
           PY
 
       - name: Check out target branch
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ fromJSON(hashFiles('/tmp/ci3-text-replacements.json') || '{}').branch }}
-          fetch-depth: 0
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="$(python3 -c "import json; print(json.load(open('/tmp/ci3-text-replacements.json'))['branch'])")"
+          git fetch --no-tags origin "$branch"
+          git checkout -B "$branch" FETCH_HEAD
 
       - name: Apply exact replacements and publish
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
           request = json.loads(Path('/tmp/ci3-text-replacements.json').read_text(encoding='utf-8'))
           path = Path(request['path'])
-          text = path.read_text(encoding='utf-8')
+          raw = path.read_bytes()
           expected_sha = request.get('expected_blob_sha')
           if expected_sha:
-              import hashlib
-              actual = hashlib.sha1(f'blob {len(text.encode())}\0'.encode() + text.encode()).hexdigest()
+              actual = hashlib.sha1(f'blob {len(raw)}\0'.encode() + raw).hexdigest()
               if actual != expected_sha:
                   raise SystemExit(f'blob changed: expected {expected_sha}, got {actual}')
+          text = raw.decode('utf-8')
           for index, item in enumerate(request['replacements']):
               old = item['old']
               new = item['new']
