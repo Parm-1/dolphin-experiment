@@ -120,6 +120,17 @@ Synthetic known-answer tests must cover:
 - the two-SIGTERM process-controller stage;
 - route normalization of paths, time, IDs, and pointer-like values.
 
+## Cross-platform correction before a valid gate run
+
+The first hosted matrix, workflow `32167048386`, passed on Ubuntu but exposed a macOS-only
+normalization issue in the synthetic path test. `tempfile` supplied lexical `/var/...` paths while
+`Path.resolve()` produced `/private/var/...`, so the test's route text was not redacted.
+
+The correction makes route normalization recognize both lexical and canonical spellings and replace
+nested fixture or user-directory paths before their repository parent. It changes neither the frozen
+route contract nor the accepted hashes. The initial matrix is methodology evidence only and cannot
+support the gate decision; both platforms must pass again at the corrected head.
+
 ## Pass condition
 
 The harness gate passes only if:
