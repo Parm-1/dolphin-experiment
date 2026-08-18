@@ -1,0 +1,268 @@
+name: CI3 EXP-005 Fixture Build Qualification
+
+on:
+  push:
+    branches:
+      - ci3/exp005-fixture-build-v1
+    paths:
+      - ".github/workflows/ci3-exp005-fixture-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out CI3 qualification branch
+        uses: actions/checkout@v7
+        with:
+          ref: ci3/exp005-fixture-build-v1
+          fetch-depth: 0
+
+      - name: Resolve pinned source
+        id: source
+        shell: bash
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          from pathlib import Path
+          data = json.loads(Path('docs/ci3/experiments/EXP-20260817-005/candidate-inventory.json').read_text())
+          print('commit=' + data['commit'])
+          PY
+
+      - name: Clone exact legal fixture source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://github.com/dolphin-emu/hwtests.git hwtests
+          git -C hwtests checkout --detach "${{ steps.source.outputs.commit }}"
+          git -C hwtests submodule update --init --recursive
+          test "$(git -C hwtests rev-parse HEAD)" = "${{ steps.source.outputs.commit }}"
+
+      - name: Pull and record PowerPC toolchain image
+        id: toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull devkitpro/devkitppc:latest | tee toolchain-pull.txt
+          image_id="$(docker image inspect devkitpro/devkitppc:latest --format '{{.Id}}')"
+          repo_digest="$(docker image inspect devkitpro/devkitppc:latest --format '{{index .RepoDigests 0}}')"
+          printf 'image_id=%s\n' "$image_id" >> "$GITHUB_OUTPUT"
+          printf 'repo_digest=%s\n' "$repo_digest" >> "$GITHUB_OUTPUT"
+          docker run --rm devkitpro/devkitppc:latest bash -lc '
+            set -e
+            printf "powerpc-eabi-gcc: "
+            powerpc-eabi-gcc --version | head -1
+            printf "powerpc-eabi-ld: "
+            powerpc-eabi-ld --version | head -1
+            printf "make: "
+            make --version | head -1
+            printf "DEVKITPRO=%s\nDEVKITPPC=%s\n" "$DEVKITPRO" "$DEVKITPPC"
+          ' | tee toolchain-environment.txt
+
+      - name: Build all pinned hwtests
+        id: build
+        shell: bash
+        run: |
+          set +e
+          docker run --rm \
+            -v "$PWD/hwtests:/work" \
+            -w /work \
+            devkitpro/devkitppc:latest \
+            bash -lc 'set -o pipefail; make -j2' \
+            2>&1 | tee build.txt
+          status=${PIPESTATUS[0]}
+          printf 'status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Generate build qualification evidence
+        if: success()
+        shell: bash
+        env:
+          HWTESTS_COMMIT: ${{ steps.source.outputs.commit }}
+          TOOLCHAIN_IMAGE_ID: ${{ steps.toolchain.outputs.image_id }}
+          TOOLCHAIN_REPO_DIGEST: ${{ steps.toolchain.outputs.repo_digest }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import platform
+          import subprocess
+          import textwrap
+
+          repo = pathlib.Path.cwd()
+          source = repo / 'hwtests'
+          experiment = repo / 'docs/ci3/experiments/EXP-20260817-005'
+          experiment.mkdir(parents=True, exist_ok=True)
+
+          def sha256(path: pathlib.Path) -> str:
+              digest = hashlib.sha256()
+              with path.open('rb') as handle:
+                  for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          porcelain = subprocess.check_output(
+              ['git', '-C', str(source), 'status', '--porcelain=v1', '--untracked-files=all'],
+              text=True,
+          )
+          generated_paths: list[pathlib.Path] = []
+          for line in porcelain.splitlines():
+              if not line:
+                  continue
+              rel = line[3:]
+              path = source / rel
+              if path.is_file():
+                  generated_paths.append(path)
+
+          executable_suffixes = {'.dol', '.elf'}
+          executable_outputs = []
+          intermediate_suffix_counts: dict[str, int] = {}
+          for path in sorted(generated_paths):
+              rel = str(path.relative_to(source))
+              suffix = path.suffix.lower() or '<none>'
+              if suffix in executable_suffixes:
+                  executable_outputs.append({
+                      'path': rel,
+                      'size_bytes': path.stat().st_size,
+                      'sha256': sha256(path),
+                      'suffix': suffix,
+                  })
+              else:
+                  intermediate_suffix_counts[suffix] = intermediate_suffix_counts.get(suffix, 0) + 1
+
+          if not executable_outputs:
+              raise SystemExit('build completed but produced no .dol or .elf outputs')
+
+          environment_lines = pathlib.Path('toolchain-environment.txt').read_text(encoding='utf-8').splitlines()
+          build_log = pathlib.Path('build.txt')
+          manifest = {
+              'schema_version': 1,
+              'experiment_id': 'EXP-20260817-005',
+              'qualification_stage': 'source_build_only',
+              'date': '2026-08-17',
+              'repository': 'dolphin-emu/hwtests',
+              'source_commit': os.environ['HWTESTS_COMMIT'],
+              'source_license': 'GPL-2.0-or-later',
+              'runner': {
+                  'label': 'ubuntu-24.04',
+                  'platform': platform.platform(),
+              },
+              'toolchain': {
+                  'image_reference_requested': 'devkitpro/devkitppc:latest',
+                  'image_id': os.environ['TOOLCHAIN_IMAGE_ID'],
+                  'repository_digest': os.environ['TOOLCHAIN_REPO_DIGEST'],
+                  'reported_environment': environment_lines,
+              },
+              'build': {
+                  'command': "docker run --rm -v '$PWD/hwtests:/work' -w /work devkitpro/devkitppc:latest bash -lc 'make -j2'",
+                  'exit_status': 0,
+                  'build_log_sha256': sha256(build_log),
+                  'generated_file_count': len(generated_paths),
+                  'executable_output_count': len(executable_outputs),
+                  'intermediate_suffix_counts': dict(sorted(intermediate_suffix_counts.items())),
+              },
+              'executable_outputs': executable_outputs,
+              'interpretation': {
+                  'build_qualified': True,
+                  'route_qualified': False,
+                  'profile_data_generated': False,
+                  'profile_data_examined': False,
+                  'fixture_selected': False,
+              },
+              'data_boundary': (
+                  'Only source/toolchain pins, build-log hash, output paths, sizes, and hashes are committed. '
+                  'Built binaries and raw build logs remain uncommitted.'
+              ),
+          }
+          (experiment / 'build-qualification-v1.json').write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + '\n', encoding='utf-8'
+          )
+
+          lines = [
+              '# EXP-20260817-005 build qualification v1',
+              '',
+              '**Verdict: SOURCE BUILD PASS; ROUTE QUALIFICATION NOT STARTED**',
+              '',
+              f"- Pinned source: `dolphin-emu/hwtests@{os.environ['HWTESTS_COMMIT']}`",
+              f"- Recorded toolchain digest: `{os.environ['TOOLCHAIN_REPO_DIGEST']}`",
+              '- Build command: root `make -j2` inside the recorded devkitPPC container',
+              f'- Executable outputs: {len(executable_outputs)}',
+              f'- Generated files observed: {len(generated_paths)}',
+              f'- Raw build-log SHA-256: `{sha256(build_log)}`',
+              '',
+              'The build produced the following locally held executable candidates. Paths, sizes, and hashes',
+              'are metadata only; the binaries are not committed.',
+              '',
+              '| Output | Size (bytes) | SHA-256 |',
+              '|---|---:|---|',
+          ]
+          for item in executable_outputs:
+              lines.append(f"| `{item['path']}` | {item['size_bytes']} | `{item['sha256']}` |")
+          lines.extend([
+              '',
+              '## Interpretation boundary',
+              '',
+              '- This proves only that the pinned open-source suite builds in the recorded toolchain.',
+              '- No fixture has been selected, launched, or shown deterministic.',
+              '- No profiler environment variable was set.',
+              '- No schema-v1 profile was generated or examined.',
+              '- Build success is not route qualification, workload representativeness, coverage, overhead,',
+              '  lowering correctness, or performance evidence.',
+              '',
+              'The next step is source-based candidate classification followed by non-profiled route',
+              'qualification. Exact selected fixtures must still be frozen before profile output is opened.',
+              '',
+          ])
+          (experiment / 'build-qualification-v1.md').write_text('\n'.join(lines), encoding='utf-8')
+
+          PY
+
+      - name: Verify evidence-only scope and publish
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf hwtests toolchain-pull.txt toolchain-environment.txt build.txt
+          git diff --check
+          python3 - <<'PY'
+          import subprocess
+
+          allowed = {
+              'docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json',
+              'docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.md',
+          }
+          output = subprocess.check_output(['git', 'status', '--porcelain=v1'], text=True)
+          actual = {line[3:] for line in output.splitlines() if line}
+          if actual != allowed:
+              raise SystemExit(f'unexpected worktree scope: {sorted(actual ^ allowed)}')
+          print(output, end='')
+          PY
+          git config user.name 'Parm-1'
+          git config user.email '75600769+Parm-1@users.noreply.github.com'
+          git add -A -- \
+            docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.json \
+            docs/ci3/experiments/EXP-20260817-005/build-qualification-v1.md
+          git commit \
+            -m 'CI3: qualify pinned legal fixture source build' \
+            -m 'Build the exact pinned Dolphin hwtests source in a recorded devkitPPC container and preserve only toolchain/source pins plus executable output hashes. No fixture is selected or run and no profiler output is generated or examined.'
+          git push origin HEAD:ci3/exp005-fixture-build-v1
+
+      - name: Upload diagnostic logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci3-exp005-fixture-build-failure
+          path: |
+            toolchain-pull.txt
+            toolchain-environment.txt
+            build.txt
+          if-no-files-found: warn
+          retention-days: 7
