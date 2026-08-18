@@ -32,6 +32,7 @@ jobs:
           git merge-base --is-ancestor 4b67e513f913c77e534aaf50d6b7ecae8780d7b2 HEAD
           test -z "${DOLPHIN_CI3_BLOCK_PROFILE_PATH:-}"
           python3 -m py_compile Tools/ci3/exp005/freeze_fixture_manifest.py
+          rm -rf Tools/ci3/exp005/__pycache__
           if test -f docs/ci3/experiments/EXP-20260817-005/fixture-freeze-v2-evidence.json; then
             python3 Tools/ci3/exp005/freeze_fixture_manifest.py --check
             echo 'freeze outputs already materialized'
