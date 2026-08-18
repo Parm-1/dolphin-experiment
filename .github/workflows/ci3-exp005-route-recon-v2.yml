@@ -268,6 +268,7 @@ jobs:
                   command = [
                       'timeout', '--signal=TERM', '--kill-after=5s', '12s',
                       str(binary), '-e', str(fixture), '-u', str(user_dir), '-v', 'Null',
+                      '-p', 'headless',
                       '-C', 'Dolphin.Core.CPUCore=2',
                       '-C', 'Dolphin.Core.DSPHLE=True',
                   ]
